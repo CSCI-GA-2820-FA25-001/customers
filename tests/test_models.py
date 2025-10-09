@@ -23,8 +23,8 @@ import os
 import logging
 from unittest import TestCase
 from wsgi import app
-from service.models import YourResourceModel, DataValidationError, db
-from .factories import YourResourceModelFactory
+from service.models import Customer, DataValidationError, db
+from .factories import CustomerFactory
 
 DATABASE_URI = os.getenv(
     "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
@@ -32,11 +32,11 @@ DATABASE_URI = os.getenv(
 
 
 ######################################################################
-#  YourResourceModel   M O D E L   T E S T   C A S E S
+#  C U S T O M E R  M O D E L   T E S T   C A S E S
 ######################################################################
 # pylint: disable=too-many-public-methods
-class TestYourResourceModel(TestCase):
-    """Test Cases for YourResourceModel Model"""
+class TestCustomer(TestCase):
+    """Test Cases for Customer Model"""
 
     @classmethod
     def setUpClass(cls):
@@ -54,7 +54,7 @@ class TestYourResourceModel(TestCase):
 
     def setUp(self):
         """This runs before each test"""
-        db.session.query(YourResourceModel).delete()  # clean up the last tests
+        db.session.query(Customer).delete()  # clean up the last tests
         db.session.commit()
 
     def tearDown(self):
@@ -65,15 +65,17 @@ class TestYourResourceModel(TestCase):
     #  T E S T   C A S E S
     ######################################################################
 
-    def test_example_replace_this(self):
-        """It should create a YourResourceModel"""
+    def test_create_customer(self):
+        """It should create a Customer"""
         # Todo: Remove this test case example
-        resource = YourResourceModelFactory()
-        resource.create()
-        self.assertIsNotNone(resource.id)
-        found = YourResourceModel.all()
+        customer = CustomerFactory()
+        customer.create()
+        self.assertIsNotNone(customer.id)
+        found = Customer.all()
         self.assertEqual(len(found), 1)
-        data = YourResourceModel.find(resource.id)
-        self.assertEqual(data.name, resource.name)
+        data = Customer.find(customer.id)
+        self.assertEqual(data.first_name, customer.first_name)
+        self.assertEqual(data.last_name, customer.last_name)
+        self.assertEqual(data.address, customer.address)
 
     # Todo: Add your test cases here...
