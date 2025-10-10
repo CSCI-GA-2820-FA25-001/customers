@@ -67,7 +67,6 @@ class TestCustomer(TestCase):
 
     def test_create_customer(self):
         """It should create a Customer"""
-        # Todo: Remove this test case example
         customer = CustomerFactory()
         customer.create()
         self.assertIsNotNone(customer.id)
@@ -79,3 +78,58 @@ class TestCustomer(TestCase):
         self.assertEqual(data.address, customer.address)
 
     # Todo: Add your test cases here...
+    def test_serialize_customer(self):
+        """It should serialize a Customer into a dictionary"""
+        customer = CustomerFactory()
+        data = customer.serialize()
+        self.assertIn("first_name", data)
+        self.assertIn("last_name", data)
+        self.assertIn("address", data)
+        self.assertEqual(data["first_name"], customer.first_name)
+
+    def test_deserialize_customer(self):
+        """It should deserialize a Customer from a dictionary"""
+        data = {
+            "first_name": "Arushi",
+            "last_name": "Srivastava",
+            "address": "123 Main Street",
+        }
+        customer = Customer()
+        customer.deserialize(data)
+        self.assertEqual(customer.first_name, "Arushi")
+        self.assertEqual(customer.last_name, "Srivastava")
+        self.assertEqual(customer.address, "123 Main Street")
+
+    def test_deserialize_missing_data(self):
+        """It should raise DataValidationError when required fields are missing"""
+        data = {"first_name": "Alex"}
+        customer = Customer()
+        with self.assertRaises(DataValidationError):
+            customer.deserialize(data)
+
+    def test_find_customer(self):
+        """It should find a Customer by ID"""
+        customers = CustomerFactory.create_batch(2)
+        for customer in customers:
+            customer.create()
+
+        found = Customer.find(customers[0].id)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, customers[0].id)
+
+    def test_find_by_name(self):
+        """It should find customers by name"""
+        customer1 = CustomerFactory(first_name="Arushi", last_name="Srivastava")
+        customer2 = CustomerFactory(first_name="Alex", last_name="Chen")
+        customer1.create()
+        customer2.create()
+
+        results = Customer.find_by_name("Arushi")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].first_name, "Arushi")
+
+    def test_repr(self):
+        """It should return a string representation of the Customer"""
+        customer = CustomerFactory()
+        result = repr(customer)
+        self.assertIn("Customer", result)

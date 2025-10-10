@@ -73,3 +73,12 @@ class TestYourResourceService(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     # Todo: Add your test cases here...
+    def test_get_customer_not_found(self):
+       """It should return 404 if customer is not found"""
+       resp = self.client.get("/customers/9999")
+       self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_create_customer_invalid(self):
+      """It should return 400 when creating an invalid customer"""
+      resp = self.client.post("/customers", json={})
+      self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

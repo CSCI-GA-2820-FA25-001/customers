@@ -33,34 +33,35 @@ class Customer(db.Model):
     # Todo: Place the rest of your schema here...
 
     def __repr__(self):
-        return f"<Customer {self.name} id=[{self.id}]>"
+        return f"<Customer {self.first_name} {self.last_name} id=[{self.id}]>"
 
     def create(self):
         """
         Creates a Customer to the database
         """
-        logger.info("Creating %s", self.first_name)
-        logger.info("Creating %s", self.last_name)
-        self.id = None  # pylint: disable=invalid-name
+        #logger.info("Creating %s %s", self.first_name, self.last_name)
         try:
             db.session.add(self)
             db.session.commit()
+            logger.info("Created Customer %s %s", self.first_name, self.last_name)
         except Exception as e:
             db.session.rollback()
-            logger.error("Error creating record: %s", self)
+            logger.error("Error creating Customer: %s", e)
             raise DataValidationError(e) from e
+        return self
 
     def update(self):
         """
         Updates a Customer to the database
         """
-        logger.info("Saving %s", self.name)
+        logger.info("Updating %s %s", self.first_name, self.last_name)
         try:
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            logger.error("Error updating record: %s", self)
+            logger.error("Error updating record: %s", e)
             raise DataValidationError(e) from e
+        return self
 
     def delete(self):
         """Removes a Customer from the data store"""
@@ -92,19 +93,11 @@ class Customer(db.Model):
         try:
             self.first_name = data["first_name"]
             self.last_name = data["last_name"]
-            self.address = data["address"]
-        except AttributeError as error:
-            raise DataValidationError("Invalid attribute: " + error.args[0]) from error
+            self.address = data.get("address", "")
         except KeyError as error:
-            raise DataValidationError(
-                "Invalid Customer: missing " + error.args[0]
-            ) from error
-        except TypeError as error:
-            raise DataValidationError(
-                "Invalid Customer: body of request contained bad or no data "
-                + str(error)
-            ) from error
-        return self
+            raise DataValidationError(f"Missing {error.args[0]}")
+        return self 
+
 
     ##################################################
     # CLASS METHODS
@@ -120,14 +113,13 @@ class Customer(db.Model):
     def find(cls, by_id):
         """Finds a Customer by it's ID"""
         logger.info("Processing lookup for id %s ...", by_id)
-        return cls.query.session.get(cls, by_id)
+        return cls.query.get(by_id)
 
     @classmethod
-    def find_by_name(cls, name):
-        """Returns all Customers with the given name
-
-        Args:
-            name (string): the name of the Customers you want to match
-        """
-        logger.info("Processing name query for %s ...", name)
-        return cls.query.filter(cls.name == name)
+    def find_by_name(cls, first_name, last_name=None):
+        """Finds customers by first or full name"""
+        logger.info("Processing name query for %s ...", first_name)
+        query = cls.query.filter(cls.first_name == first_name)
+        if last_name:
+            query = query.filter(cls.last_name == last_name)
+        return query.all()
