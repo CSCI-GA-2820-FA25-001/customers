@@ -99,12 +99,14 @@ class TestYourResourceService(TestCase):
         resp = self.client.get("/customers/99999")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         body = resp.get_json()
-        self.assertEqual(body.get("message"), "customer not found")
+        self.assertIn("customer not found", body.get("message", ""))
 
-    def test_get_customer_non_integer_id_returns_404_json(self):
+    def test_get_customer_non_integer_id_returns_400_json(self):
         resp = self.client.get("/customers/abc")
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertIsInstance(resp.get_json(), dict)  
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Bad Request")
+        self.assertIn("must be an integer", data["message"])
     
     def test_create_customer_datavalidation_error(self):
         """It should return 400 via DataValidationError when JSON is present but invalid"""
@@ -112,4 +114,26 @@ class TestYourResourceService(TestCase):
         resp = self.client.post("/customers", json=payload)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         body = resp.get_json()
-        self.assertIn("Invalid customer data", body.get("error", ""))
+        self.assertEqual(body.get("error"), "Bad Request")
+        self.assertIn("Missing last_name", body.get("message", ""))
+
+
+    def test_delete_customer_success(self):
+        c = Customer(first_name="Aishwarya", last_name="Anand", address="nyu")
+        c.create()
+        resp = self.client.delete(f"/customers/{c.id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        resp = self.client.get(f"/customers/{c.id}")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_customer_not_found(self):
+        resp = self.client.delete("/customers/99999")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_customer_non_integer_id_returns_400(self):
+        """It should return 400 Bad Request when customer_id is not an integer"""
+        resp = self.client.delete("/customers/abcd")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Bad Request")
+        self.assertIn("must be an integer", data["message"])

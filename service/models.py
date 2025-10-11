@@ -65,7 +65,7 @@ class Customer(db.Model):
 
     def delete(self):
         """Removes a Customer from the data store"""
-        logger.info("Deleting %s", self.name)
+        logger.info("Deleting Customer %s %s", self.first_name, self.last_name)
         try:
             db.session.delete(self)
             db.session.commit()

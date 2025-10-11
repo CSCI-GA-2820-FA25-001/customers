@@ -25,6 +25,7 @@ from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
 from service.models import Customer, DataValidationError
 from service.common import status  # HTTP Status Codes
+from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
 
 
 ######################################################################
@@ -64,26 +65,29 @@ def create_customer():
         return jsonify(customer.serialize()), 201
     except DataValidationError as e:
         app.logger.error("Data validation error: %s", e)
-        return jsonify({"error": "Invalid customer data", "message": str(e)}), 400
+        raise BadRequest(str(e))
     except Exception as e:
         app.logger.exception("Unexpected error creating customer")
-        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
+        raise InternalServerError(str(e))
 
-@app.route("/customers/<int:customer_id>", methods=["GET"])
-def get_customer(customer_id: int):
+@app.route("/customers/<customer_id>", methods=["GET"])
+def get_customer(customer_id):
     """Read a single customer by id"""
+    if not customer_id.isdigit():
+        raise BadRequest("customer id must be an integer")
+    customer_id = int(customer_id)
+
     try:
         customer = Customer.find(customer_id)
     except Exception as err:
-        # Anything unexpected becomes a 500 with JSON body
-        app.logger.error("Unexpected error reading customer %s", customer_id)
-        return jsonify(status=500, error="Internal Server Error", message=str(err)), 500
+        app.logger.exception("Unexpected error reading customer %s", customer_id)
+        raise InternalServerError(str(err))
 
     if not customer:
-        return jsonify(status=404, error="Not Found", message="customer not found"), 404
+        raise NotFound("customer not found")
 
-    return jsonify(customer.serialize()), 200
-  
+    return jsonify(customer.serialize()), status.HTTP_200_OK
+
 @app.route("/customers", methods=["GET"])
 def list_customers():
     """Returns a list of all Customers"""
@@ -95,29 +99,28 @@ def list_customers():
         return jsonify(results), status.HTTP_200_OK
     except Exception as e:
         app.logger.exception("Error fetching customers: %s", e)
-        return jsonify({
-            "error": "Internal Server Error",
-            "message": str(e)
-        }), status.HTTP_500_INTERNAL_SERVER_ERROR
+        raise InternalServerError(str(e))
 
-#Error handlers
-@app.errorhandler(status.HTTP_400_BAD_REQUEST)
-def bad_request(error):
-    """Handles 400 Bad Request errors"""
-    return jsonify(status=400, error="Bad Request", message=str(error)), status.HTTP_400_BAD_REQUEST
+@app.route("/customers/<customer_id>", methods=["DELETE"])
+def delete_customer(customer_id):
+    """Delete a customer by id"""
+    if not customer_id.isdigit():
+        raise BadRequest("customer id must be an integer")
+    customer_id = int(customer_id)
 
+    try:
+        customer = Customer.find(customer_id)
+    except Exception as err:
+        app.logger.exception("Unexpected error locating customer %s", customer_id)
+        raise InternalServerError(str(err))
 
-@app.errorhandler(status.HTTP_404_NOT_FOUND)
-def not_found(error):
-    """Handles 404 Not Found errors"""
-    return jsonify(status=404, error="Not Found", message=str(error)), status.HTTP_404_NOT_FOUND
+    if not customer:
+        raise NotFound("customer not found")
 
+    try:
+        customer.delete()
+    except DataValidationError as err:
+        app.logger.exception("Unexpected error deleting customer %s", customer_id)
+        raise InternalServerError(str(err))
 
-@app.errorhandler(status.HTTP_500_INTERNAL_SERVER_ERROR)
-def internal_server_error(error):
-    """Handles 500 Internal Server Error"""
-    return (
-        jsonify(status=500, error="Internal Server Error", message=str(error)),
-        status.HTTP_500_INTERNAL_SERVER_ERROR,
-    )
-
+    return "", status.HTTP_204_NO_CONTENT
