@@ -14,7 +14,7 @@ db = SQLAlchemy()
 
 
 class DataValidationError(Exception):
-    """Used for an data validation errors when deserializing"""
+    """Used for data validation errors when deserializing"""
 
 
 class Customer(db.Model):
@@ -30,7 +30,7 @@ class Customer(db.Model):
     last_name = db.Column(db.String(63))
     address = db.Column(db.String(256))
 
-    # Todo: Place the rest of your schema here...
+    # Additional columns for the Customer model can be added here.
 
     def __repr__(self):
         return f"<Customer {self.first_name} {self.last_name} id=[{self.id}]>"
@@ -39,7 +39,7 @@ class Customer(db.Model):
         """
         Creates a Customer to the database
         """
-        #logger.info("Creating %s %s", self.first_name, self.last_name)
+        # logger.info("Creating %s %s", self.first_name, self.last_name)
         try:
             db.session.add(self)
             db.session.commit()
@@ -65,7 +65,7 @@ class Customer(db.Model):
 
     def delete(self):
         """Removes a Customer from the data store"""
-        logger.info("Deleting %s", self.name)
+        logger.info("Deleting Customer %s %s", self.first_name, self.last_name)
         try:
             db.session.delete(self)
             db.session.commit()
@@ -95,9 +95,8 @@ class Customer(db.Model):
             self.last_name = data["last_name"]
             self.address = data.get("address", "")
         except KeyError as error:
-            raise DataValidationError(f"Missing {error.args[0]}")
-        return self 
-
+            raise DataValidationError(f"Missing {error.args[0]}") from error
+        return self
 
     ##################################################
     # CLASS METHODS
@@ -111,7 +110,7 @@ class Customer(db.Model):
 
     @classmethod
     def find(cls, by_id):
-        """Finds a Customer by it's ID"""
+        """Finds a Customer by its ID"""
         logger.info("Processing lookup for id %s ...", by_id)
         return cls.query.get(by_id)
 
