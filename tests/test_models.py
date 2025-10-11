@@ -2,7 +2,7 @@
 # Copyright 2016, 2024 John J. Rofrano. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
+# You may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 # https://www.apache.org/licenses/LICENSE-2.0
@@ -15,7 +15,7 @@
 ######################################################################
 
 """
-Test cases for Pet Model
+Test cases for Customer Model
 """
 
 # pylint: disable=duplicate-code
@@ -77,30 +77,20 @@ class TestCustomer(TestCase):
         self.assertEqual(data.last_name, customer.last_name)
         self.assertEqual(data.address, customer.address)
 
-    # Todo: Add your test cases here...
-    def test_list_all_customers(app):
-     """It should list all Customers"""
-    with app.app_context():
-        # Clear all existing customers
-        db.session.query(Customer).delete()
-        db.session.commit()
+    def test_list_all_customers(self):
+        """It should list all Customers"""
+        # Add multiple customers with deterministic names
+        c1 = Customer(first_name="Alice", last_name="Smith", address="123 Main St")
+        c2 = Customer(first_name="Bob", last_name="Johnson", address="456 Elm St")
+        c3 = Customer(first_name="Carol", last_name="Williams", address="789 Oak St")
+        for c in (c1, c2, c3):
+            c.create()
 
-        # Add multiple customers
-        customer1 = Customer(first_name="Alice", last_name="Smith", address="123 Main St")
-        customer2 = Customer(first_name="Bob", last_name="Johnson", address="456 Elm St")
-        customer3 = Customer(first_name="Carol", last_name="Williams", address="789 Oak St")
-
-        db.session.add_all([customer1, customer2, customer3])
-        db.session.commit()
-
-        # Fetch all customers using class method
         customers = Customer.all()
-        assert len(customers) == 3
-        names = [c.first_name for c in customers]
-        assert "Alice" in names
-        assert "Bob" in names
-        assert "Carol" in names
-        
+        self.assertEqual(len(customers), 3)
+        names = {c.first_name for c in customers}
+        self.assertTrue({"Alice", "Bob", "Carol"}.issubset(names))
+
     def test_serialize_customer(self):
         """It should serialize a Customer into a dictionary"""
         customer = CustomerFactory()

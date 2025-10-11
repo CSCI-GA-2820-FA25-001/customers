@@ -18,5 +18,3 @@ class CustomerFactory(factory.Factory):
     first_name = factory.Faker("first_name")
     last_name = factory.Faker("last_name")
     address = factory.Faker("address")
-
-    # Todo: Add your other attributes here...

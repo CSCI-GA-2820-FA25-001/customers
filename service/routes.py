@@ -21,11 +21,12 @@ This service implements a REST API that allows you to Create, Read, Update
 and Delete Customer
 """
 
-from flask import jsonify, request, url_for, abort
+from flask import jsonify, request
 from flask import current_app as app  # Import Flask application
+from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
+
 from service.models import Customer, DataValidationError
 from service.common import status  # HTTP Status Codes
-from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
 
 
 ######################################################################
@@ -51,24 +52,24 @@ def index():
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
 
-# Todo: Place your REST API code here ...
 @app.route("/customers", methods=["POST"])
 def create_customer():
     """Creates a new Customer record"""
     data = request.get_json()
     if not data:
-        return jsonify({"error": "Invalid request", "message": "No input data provided"}), 400
+        raise BadRequest("No input data provided")
 
     try:
-        customer = Customer().deserialize(data)  # must be an instance
+        customer = Customer().deserialize(data)
         customer.create()
-        return jsonify(customer.serialize()), 201
+        return jsonify(customer.serialize()), status.HTTP_201_CREATED
     except DataValidationError as e:
         app.logger.error("Data validation error: %s", e)
-        raise BadRequest(str(e))
+        raise BadRequest(str(e)) from e
     except Exception as e:
         app.logger.exception("Unexpected error creating customer")
-        raise InternalServerError(str(e))
+        raise InternalServerError(str(e)) from e
+
 
 @app.route("/customers/<customer_id>", methods=["GET"])
 def get_customer(customer_id):
@@ -79,27 +80,28 @@ def get_customer(customer_id):
 
     try:
         customer = Customer.find(customer_id)
-    except Exception as err:
+    except Exception as err:  # pragma: no cover - unexpected
         app.logger.exception("Unexpected error reading customer %s", customer_id)
-        raise InternalServerError(str(err))
+        raise InternalServerError(str(err)) from err
 
     if not customer:
         raise NotFound("customer not found")
 
     return jsonify(customer.serialize()), status.HTTP_200_OK
 
+
 @app.route("/customers", methods=["GET"])
 def list_customers():
     """Returns a list of all Customers"""
     app.logger.info("Request to list all customers")
-
     try:
         customers = Customer.query.all()
         results = [customer.serialize() for customer in customers]
         return jsonify(results), status.HTTP_200_OK
     except Exception as e:
         app.logger.exception("Error fetching customers: %s", e)
-        raise InternalServerError(str(e))
+        raise InternalServerError(str(e)) from e
+
 
 @app.route("/customers/<customer_id>", methods=["DELETE"])
 def delete_customer(customer_id):
@@ -112,7 +114,7 @@ def delete_customer(customer_id):
         customer = Customer.find(customer_id)
     except Exception as err:
         app.logger.exception("Unexpected error locating customer %s", customer_id)
-        raise InternalServerError(str(err))
+        raise InternalServerError(str(err)) from err
 
     if not customer:
         raise NotFound("customer not found")
@@ -121,6 +123,6 @@ def delete_customer(customer_id):
         customer.delete()
     except DataValidationError as err:
         app.logger.exception("Unexpected error deleting customer %s", customer_id)
-        raise InternalServerError(str(err))
+        raise InternalServerError(str(err)) from err
 
     return "", status.HTTP_204_NO_CONTENT

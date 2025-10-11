@@ -64,7 +64,7 @@ class TestYourResourceService(TestCase):
         db.session.remove()
 
     ######################################################################
-    #  P L A C E   T E S T   C A S E S   H E R E
+    #  T E S T   C A S E S
     ######################################################################
 
     def test_index(self):
@@ -72,53 +72,58 @@ class TestYourResourceService(TestCase):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    # Todo: Add your test cases here...
     def test_get_customer_not_found(self):
-       """It should return 404 if customer is not found"""
-       resp = self.client.get("/customers/9999")
-       self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        """It should return 404 if customer is not found"""
+        resp = self.client.get("/customers/9999")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_create_customer_invalid(self):
-      """It should return 400 when creating an invalid customer"""
-      resp = self.client.post("/customers", json={})
-      self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        """It should return 400 when creating an invalid customer"""
+        resp = self.client.post("/customers", json={})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_get_customer_success(self):
-        cust = Customer(first_name="Aishwarya", last_name="Anand",
-                        address="12 Logic Ln")
+        """It should return 200 and the customer payload"""
+        cust = Customer(
+            first_name="Aishwarya",
+            last_name="Anand",
+            address="12 Logic Ln",
+        )
         cust.create()
 
         resp = self.client.get(f"/customers/{cust.id}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
-        for k in ("id","first_name","last_name","address"):
+        for k in ("id", "first_name", "last_name", "address"):
             self.assertIn(k, data)
         self.assertEqual(data["id"], cust.id)
 
     def test_get_customer_not_found_message(self):
+        """It should include a helpful 404 message"""
         resp = self.client.get("/customers/99999")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         body = resp.get_json()
         self.assertIn("customer not found", body.get("message", ""))
 
     def test_get_customer_non_integer_id_returns_400_json(self):
+        """It should return 400 when the id is not an integer"""
         resp = self.client.get("/customers/abc")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         data = resp.get_json()
         self.assertEqual(data["error"], "Bad Request")
         self.assertIn("must be an integer", data["message"])
-    
+
     def test_create_customer_datavalidation_error(self):
         """It should return 400 via DataValidationError when JSON is present but invalid"""
-        payload = {"first_name": "OnlyFirst"} 
+        payload = {"first_name": "OnlyFirst"}
         resp = self.client.post("/customers", json=payload)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         body = resp.get_json()
         self.assertEqual(body.get("error"), "Bad Request")
         self.assertIn("Missing last_name", body.get("message", ""))
 
-
     def test_delete_customer_success(self):
+        """It should delete an existing customer and return 204"""
         c = Customer(first_name="Aishwarya", last_name="Anand", address="nyu")
         c.create()
         resp = self.client.delete(f"/customers/{c.id}")
@@ -127,6 +132,7 @@ class TestYourResourceService(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_delete_customer_not_found(self):
+        """It should return 404 for a non-existent customer"""
         resp = self.client.delete("/customers/99999")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
