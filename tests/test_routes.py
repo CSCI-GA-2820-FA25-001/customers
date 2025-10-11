@@ -82,3 +82,34 @@ class TestYourResourceService(TestCase):
       """It should return 400 when creating an invalid customer"""
       resp = self.client.post("/customers", json={})
       self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_get_customer_success(self):
+        cust = Customer(first_name="Aishwarya", last_name="Anand",
+                        address="12 Logic Ln")
+        cust.create()
+
+        resp = self.client.get(f"/customers/{cust.id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        for k in ("id","first_name","last_name","address"):
+            self.assertIn(k, data)
+        self.assertEqual(data["id"], cust.id)
+
+    def test_get_customer_not_found_message(self):
+        resp = self.client.get("/customers/99999")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        body = resp.get_json()
+        self.assertEqual(body.get("message"), "customer not found")
+
+    def test_get_customer_non_integer_id_returns_404_json(self):
+        resp = self.client.get("/customers/abc")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIsInstance(resp.get_json(), dict)  
+    
+    def test_create_customer_datavalidation_error(self):
+        """It should return 400 via DataValidationError when JSON is present but invalid"""
+        payload = {"first_name": "OnlyFirst"} 
+        resp = self.client.post("/customers", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        body = resp.get_json()
+        self.assertIn("Invalid customer data", body.get("error", ""))
