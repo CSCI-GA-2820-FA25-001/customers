@@ -83,6 +83,22 @@ def get_customer(customer_id: int):
         return jsonify(status=404, error="Not Found", message="customer not found"), 404
 
     return jsonify(customer.serialize()), 200
+  
+@app.route("/customers", methods=["GET"])
+def list_customers():
+    """Returns a list of all Customers"""
+    app.logger.info("Request to list all customers")
+
+    try:
+        customers = Customer.query.all()
+        results = [customer.serialize() for customer in customers]
+        return jsonify(results), status.HTTP_200_OK
+    except Exception as e:
+        app.logger.exception("Error fetching customers: %s", e)
+        return jsonify({
+            "error": "Internal Server Error",
+            "message": str(e)
+        }), status.HTTP_500_INTERNAL_SERVER_ERROR
 
 #Error handlers
 @app.errorhandler(status.HTTP_400_BAD_REQUEST)
