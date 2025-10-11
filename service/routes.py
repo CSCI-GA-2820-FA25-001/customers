@@ -23,7 +23,7 @@ and Delete Customer
 
 from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
-from service.models import Customer
+from service.models import Customer, DataValidationError
 from service.common import status  # HTTP Status Codes
 
 
@@ -69,6 +69,21 @@ def create_customer():
         app.logger.exception("Unexpected error creating customer")
         return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
+@app.route("/customers/<int:customer_id>", methods=["GET"])
+def get_customer(customer_id: int):
+    """Read a single customer by id"""
+    try:
+        customer = Customer.find(customer_id)
+    except Exception as err:
+        # Anything unexpected becomes a 500 with JSON body
+        app.logger.error("Unexpected error reading customer %s", customer_id)
+        return jsonify(status=500, error="Internal Server Error", message=str(err)), 500
+
+    if not customer:
+        return jsonify(status=404, error="Not Found", message="customer not found"), 404
+
+    return jsonify(customer.serialize()), 200
+  
 @app.route("/customers", methods=["GET"])
 def list_customers():
     """Returns a list of all Customers"""
@@ -105,3 +120,4 @@ def internal_server_error(error):
         jsonify(status=500, error="Internal Server Error", message=str(error)),
         status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
+
