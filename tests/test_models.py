@@ -78,6 +78,29 @@ class TestCustomer(TestCase):
         self.assertEqual(data.address, customer.address)
 
     # Todo: Add your test cases here...
+    def test_list_all_customers(app):
+     """It should list all Customers"""
+    with app.app_context():
+        # Clear all existing customers
+        db.session.query(Customer).delete()
+        db.session.commit()
+
+        # Add multiple customers
+        customer1 = Customer(first_name="Alice", last_name="Smith", address="123 Main St")
+        customer2 = Customer(first_name="Bob", last_name="Johnson", address="456 Elm St")
+        customer3 = Customer(first_name="Carol", last_name="Williams", address="789 Oak St")
+
+        db.session.add_all([customer1, customer2, customer3])
+        db.session.commit()
+
+        # Fetch all customers using class method
+        customers = Customer.all()
+        assert len(customers) == 3
+        names = [c.first_name for c in customers]
+        assert "Alice" in names
+        assert "Bob" in names
+        assert "Carol" in names
+        
     def test_serialize_customer(self):
         """It should serialize a Customer into a dictionary"""
         customer = CustomerFactory()
