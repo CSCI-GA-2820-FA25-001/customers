@@ -146,3 +146,33 @@ class TestCustomer(TestCase):
         customer = CustomerFactory()
         result = repr(customer)
         self.assertIn("Customer", result)
+
+    def test_update_customer(self):
+        """It should update an existing Customer"""
+        customer = CustomerFactory()
+        customer.create()
+        old_id = customer.id
+        customer.address = "999 Maple Ave"
+        customer.update()
+
+        updated = Customer.find(old_id)
+        self.assertEqual(updated.address, "999 Maple Ave")
+
+    def test_delete_customer(self):
+        """It should delete a Customer"""
+        customer = CustomerFactory()
+        customer.create()
+        customer_id = customer.id
+        customer.delete()
+        self.assertIsNone(Customer.find(customer_id))
+
+    def test_find_customer_not_found(self):
+        """It should return None if the Customer is not found"""
+        self.assertIsNone(Customer.find(999999))
+
+    def test_deserialize_with_invalid_data(self):
+        """It should raise DataValidationError for invalid data types"""
+        customer = Customer()
+        bad_data = {"first_name": 123, "last_name": True, "address": None}
+        with self.assertRaises(DataValidationError):
+            customer.deserialize(bad_data)
