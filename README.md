@@ -1,69 +1,221 @@
-# NYU DevOps Project Template
+# Customers Service
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Language-Python-blue.svg)](https://python.org/)
 
-This is a skeleton you can use to start your projects.
-
-**Note:** _Feel free to overwrite this `README.md` file with the one that describes your project._
+This microservice manages customer accounts for an eCommerce platform. It provides a RESTful API for creating, reading, updating, deleting, and listing customer records.
 
 ## Overview
 
-This project template contains starter code for your class project. The `/service` folder contains your `models.py` file for your model and a `routes.py` file for your service. The `/tests` folder has test case starter code for testing the model and the service separately. All you need to do is add your functionality. You can use the [lab-flask-tdd](https://github.com/nyu-devops/lab-flask-tdd) for code examples to copy from.
+The Customers Service is a Flask-based REST API that allows you to perform CRUD operations on customer data. It uses PostgreSQL for data persistence and follows Test-Driven Development (TDD) practices with 95%+ test coverage.
 
-## Automatic Setup
+## Features
 
-The best way to use this repo is to start your own repo using it as a git template. To do this just press the green **Use this template** button in GitHub and this will become the source for your repository.
+- **Create** new customer records
+- **Read** individual customer details
+- **Update** existing customer information
+- **Delete** customer records
+- **List** all customers
+- Service metadata endpoint for health checks
 
-## Manual Setup
+## Technology Stack
 
-You can also clone this repository and then copy and paste the starter code into your project repo folder on your local computer. Be careful not to copy over your own `README.md` file so be selective in what you copy.
+- **Python 3.11**
+- **Flask** - Web framework
+- **PostgreSQL** - Database
+- **SQLAlchemy** - ORM
+- **pytest** - Testing framework
 
-There are 4 hidden files that you will need to copy manually if you use the Mac Finder or Windows Explorer to copy files from this folder into your repo folder.
+## Getting Started
 
-These should be copied using a bash shell as follows:
+### Prerequisites
 
-```bash
-    cp .gitignore  ../<your_repo_folder>/
-    cp .flaskenv ../<your_repo_folder>/
-    cp .gitattributes ../<your_repo_folder>/
+- Docker Desktop
+- Visual Studio Code with Remote Containers extension
+
+### Setup
+
+1. Clone this repository
+2. Open the folder in VS Code
+3. When prompted, click "Reopen in Container" (or use Command Palette: "Remote-Containers: Reopen in Container")
+4. Wait for the container to build and start
+
+### Initialize the Database
+`flask run`
+
+The service will start on https://localhost:8000
+
+### Running Tests
+Run all tests with coverage report:
+`make test`
+
+### API Documentation
+BASE URL: https://localhost:8000
+
+### Endpoints
+Get information and verify it's running: `GET /`
+
+Response: `200 OK`
+
+```json
+{
+  "name": "Customers Service",
+  "version": "v1.0.0",
+  "description": "Service managing customer accounts for the eCommerce site",
+  "list_url": "/customers"
+}
 ```
 
-## Contents
+1. Create Customer
+   
+   Create a new customer record.
+   
+   Request:
+   
+    ```http
+    POST /customers
+    Content-Type: application/json
+    
+    {
+        "first_name": "John",
+        "last_name": "Doe",
+        "address": "123 Main Street, New York, NY 10001"
+    }
+    ```
+    
+    Response: `201 Created`
+    
+    ```json
+    {
+        "id": 1,
+        "fist_name": "John",
+        "last_name": "Doe",
+        "address": "123 Main Street, New York, NY 10001"
+    }
+    ```
+    
+    Error Responses:
+    - `400 Bad Request` - Invalid or missing data
+    - `500 Internal Server Error` - Server error
 
-The project contains the following:
+2. List All Customers
+   
+   Retrieve all customer records.
+   
+   Request:
+   
+   `GET /customers`
+   
+   `Response: 200 OK`
 
-```text
-.gitignore          - this will ignore vagrant and other metadata files
-.flaskenv           - Environment variables to configure Flask
-.gitattributes      - File to gix Windows CRLF issues
-.devcontainers/     - Folder with support for VSCode Remote Containers
-dot-env-example     - copy to .env to use environment variables
-pyproject.toml      - Poetry list of Python libraries required by your code
+   ```json
+   [
+    {
+        "id": 1,
+        "first_name": "John"
+        "last_name": "Doe"
+        "address": "123 Main Street, New York, NY 10001"
+    },
+    
+    {
+        "id": 2,
+        "first_name": "Jane"
+        "last_name": "Smith"
+        "address": "456 Oak Avenue, Brooklyn, NY 11201",
+    }
+    ]
+    ```
+    Error Responses: `500 Internal Server Error` - Server error
 
-service/                   - service python package
-├── __init__.py            - package initializer
-├── config.py              - configuration parameters
-├── models.py              - module with business models
-├── routes.py              - module with service routes
-└── common                 - common code package
-    ├── cli_commands.py    - Flask command to recreate all tables
-    ├── error_handlers.py  - HTTP error handling code
-    ├── log_handlers.py    - logging setup code
-    └── status.py          - HTTP status constants
 
-tests/                     - test cases package
-├── __init__.py            - package initializer
-├── factories.py           - Factory for testing with fake objects
-├── test_cli_commands.py   - test suite for the CLI
-├── test_models.py         - test suite for business models
-└── test_routes.py         - test suite for service routes
-```
+3. Read Customer
+   
+   Get a specific customer by ID.
+   
+   Request: `GET /customers/{id}`
+   
+   Response: `200 OK`
 
-## License
+   ```json
+   {
+    "id": 1,
+    "first_name": "John",
+    "last_name": "Doe",
+    "address": "123 Main Street, New York, NY 10001"
+    }
+    ```
+    Error Responses: `404 Not Found` - Customer does not exist
 
-Copyright (c) 2016, 2025 [John Rofrano](https://www.linkedin.com/in/JohnRofrano/). All rights reserved.
 
-Licensed under the Apache License. See [LICENSE](LICENSE)
+4. Update Customer
+   
+   Update an existing customer record.
+   
+   Request: `PUT /customers/{id}`
+   
+   Content-Type: `application/json`
+   
+   ```json
+   {
+    "first_name": "John",
+    "last_name": "Doe",
+    "address": "789 New Street, Queens, NY 11354"
+   }
+   ```
+   Response: `200 OK`
+   
+   ```json
+   {
+    "id": 1,
+    "first_name": "John",
+    "last_name": "Doe",
+    "address": "789 New Street, Queens, NY 11354"
+    }
+    ```
+    
+    Error Responses:
+    - `404 Not Found` - Customer does not exist
+    - `400 Bad Request` - Invalid data
 
-This repository is part of the New York University (NYU) masters class: **CSCI-GA.2820-001 DevOps and Agile Methodologies** created and taught by [John Rofrano](https://cs.nyu.edu/~rofrano/), Adjunct Instructor, NYU Courant Institute, Graduate Division, Computer Science, and NYU Stern School of Business.
+
+5. Delete Customer
+   
+   Delete a customer record.
+   
+   Request: `DELETE /customers/{id}`
+   
+   Response: `204 No Content`
+   
+   Error Responses: `404 Not Found` - Customer does not exist
+
+### Testing
+
+Unit Tests - Test business logic in models.py
+
+Integration Tests - Test API endpoints in routes.py
+
+### Development
+
+#### Code Quality
+
+The project uses:
+- pylint for code linting
+- black for code formatting (optional)
+- pytest-cov for coverage reporting
+
+Run linting:
+
+`bashmake lint`
+
+### Making Changes
+
+1. Write tests first (TDD approach)
+2. Implement the feature
+3. Ensure all tests pass: make test
+4. Verify coverage stays above 95%
+
+### License
+Copyright (c) 2016, 2025 John Rofrano. All rights reserved.
+
+Licensed under the Apache License. See LICENSE
+This repository is part of the New York University (NYU) masters class: CSCI-GA.2820-001 DevOps and Agile Methodologies created and taught by John Rofrano.
