@@ -54,14 +54,11 @@ class Customer(db.Model):
         """
         Updates a Customer to the database
         """
-        logger.info("Updating %s %s", self.first_name, self.last_name)
-        try:
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logger.error("Error updating record: %s", e)
-            raise DataValidationError(e) from e
-        return self
+        if not self.id:
+            raise DataValidationError("Update called with empty ID field")
+
+        logger.info("Updating customer %s", self.first_name)
+        db.session.commit()
 
     def delete(self):
         """Removes a Customer from the data store"""
@@ -83,25 +80,41 @@ class Customer(db.Model):
             "address": self.address,
         }
 
-    def deserialize(self, data):
+    def deserialize(self, data: dict):
         """
         Deserializes a Customer from a dictionary
-
         Args:
-            data (dict): A dictionary containing the resource data
+            data (dict): A dictionary containing the Customer data
         """
         try:
+            # Validate required fields exist
+            for field in ["first_name", "last_name", "address"]:
+                if field not in data:
+                    raise KeyError(field)
+
+            # Validate types
+            for field in ["first_name", "last_name", "address"]:
+                if not isinstance(data[field], str):
+                    raise DataValidationError(
+                        f"Invalid type for {field}: must be a string"
+                    )
+
+            # Assign data
             self.first_name = data["first_name"]
             self.last_name = data["last_name"]
-            self.address = data.get("address", "")
+            self.address = data["address"]
+
+        except AttributeError as error:
+            raise DataValidationError("Invalid attribute: " + error.args[0]) from error
         except KeyError as error:
-            raise DataValidationError(f"Missing {error.args[0]}") from error
-        if not isinstance(self.first_name, str):
-            raise DataValidationError("Invalid type for first_name: must be a string")
-        if not isinstance(self.last_name, str):
-            raise DataValidationError("Invalid type for last_name: must be a string")
-        if not isinstance(self.address, str):
-            raise DataValidationError("Invalid type for address: must be a string")
+            raise DataValidationError(
+                "Invalid Customer: missing " + error.args[0]
+            ) from error
+        except TypeError as error:
+            raise DataValidationError(
+                "Invalid Customer: body of request contained bad or no data "
+                + str(error)
+            ) from error
         return self
 
     ##################################################

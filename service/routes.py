@@ -52,6 +52,7 @@ def index():
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
 
+
 @app.route("/customers", methods=["POST"])
 def create_customer():
     """Creates a new Customer record"""
@@ -101,10 +102,7 @@ def list_customers():
     except Exception as e:
         app.logger.error(f"Unexpected error while listing customers: {e}")
         return (
-            jsonify({
-                "error": "Internal Server Error",
-                "message": str(e)
-            }),
+            jsonify({"error": "Internal Server Error", "message": str(e)}),
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -122,13 +120,11 @@ def delete_customer(customer_id):
         app.logger.exception("Unexpected error locating customer %s", customer_id)
         raise InternalServerError(str(err)) from err
 
-    if not customer:
-        raise NotFound("customer not found")
-
-    try:
-        customer.delete()
-    except DataValidationError as err:
-        app.logger.exception("Unexpected error deleting customer %s", customer_id)
-        raise InternalServerError(str(err)) from err
+    if customer:
+        try:
+            customer.delete()
+        except DataValidationError as err:
+            app.logger.exception("Unexpected error deleting customer %s", customer_id)
+            raise InternalServerError(str(err)) from err
 
     return "", status.HTTP_204_NO_CONTENT
