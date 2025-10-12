@@ -25,10 +25,13 @@ from unittest import TestCase
 from wsgi import app
 from service.common import status
 from service.models import db, Customer
+from tests.factories import CustomerFactory
 
 DATABASE_URI = os.getenv(
     "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
 )
+
+BASE_URL = "/customers"
 
 
 ######################################################################
@@ -63,6 +66,25 @@ class TestYourResourceService(TestCase):
         """This runs after each test"""
         db.session.remove()
 
+    ############################################################
+    # Utility function to bulk create customers
+    ############################################################
+    def _create_customers(self, count: int = 1) -> list:
+        """Factory method to create customers in bulk"""
+        customers = []
+        for _ in range(count):
+            test_customer = CustomerFactory()
+            response = self.client.post(BASE_URL, json=test_customer.serialize())
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_201_CREATED,
+                "Could not create test customer",
+            )
+            new_customer = response.get_json()
+            test_customer.id = new_customer["id"]
+            customers.append(test_customer)
+        return customers
+
     ######################################################################
     #  T E S T   C A S E S
     ######################################################################
@@ -71,6 +93,20 @@ class TestYourResourceService(TestCase):
         """It should call the home page"""
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["name"], "Customers Service")
+
+    # ----------------------------------------------------------
+    # TEST READ
+    # ----------------------------------------------------------
+
+    def test_get_customer_list(self):
+        """It should Get a list of Customers"""
+        self._create_customers(5)
+        response = self.client.get(BASE_URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.get_json()
+        self.assertEqual(len(data), 5)
 
     def test_get_customer_not_found(self):
         """It should return 404 if customer is not found"""
@@ -120,7 +156,27 @@ class TestYourResourceService(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         body = resp.get_json()
         self.assertEqual(body.get("error"), "Bad Request")
-        self.assertIn("Missing last_name", body.get("message", ""))
+        self.assertIn("missing last_name", body.get("message", ""))
+
+    # ----------------------------------------------------------
+    # TEST DELETE
+    # ----------------------------------------------------------
+
+    def test_delete_customer(self):
+        """It should Delete a Customer"""
+        test_customer = self._create_customers(1)[0]
+        response = self.client.delete(f"{BASE_URL}/{test_customer.id}")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(len(response.data), 0)
+        # make sure they are deleted
+        response = self.client.get(f"{BASE_URL}/{test_customer.id}")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_non_existing_customer(self):
+        """It should Delete a Customer even if it doesn't exist"""
+        response = self.client.delete(f"{BASE_URL}/0")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(len(response.data), 0)
 
     def test_delete_customer_success(self):
         """It should delete an existing customer and return 204"""
@@ -129,11 +185,6 @@ class TestYourResourceService(TestCase):
         resp = self.client.delete(f"/customers/{c.id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         resp = self.client.get(f"/customers/{c.id}")
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
-
-    def test_delete_customer_not_found(self):
-        """It should return 404 for a non-existent customer"""
-        resp = self.client.delete("/customers/99999")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_delete_customer_non_integer_id_returns_400(self):
@@ -162,24 +213,28 @@ class TestYourResourceService(TestCase):
 
     def test_list_customers_internal_error(self):
         """It should handle internal server errors when listing customers"""
+
         # pylint: disable=too-few-public-methods
         class MockQuery:
             """Class for database failures"""
+
             def all(self):
                 """Raises exception for database failures"""
-                raise Exception("Database failure") # pylint: disable=broad-exception-raised
+                raise RuntimeError("Database failure")
+
         original_query = Customer.query
-        Customer.query = MockQuery()  # Replace the entire query object
+        Customer.query = MockQuery()
         resp = self.client.get("/customers")
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         data = resp.get_json()
         self.assertIn("Internal Server Error", data["error"])
         Customer.query = original_query
+
     def test_create_customer_with_exception(self):
         """It should return 500 when an unexpected exception occurs during creation"""
-        # Monkeypatch Customer.deserialize to raise a general Exception
+
         def mock_deserialize(_):
-            raise Exception("Unexpected error")  # pylint: disable=broad-exception-raised
+            raise RuntimeError("Unexpected error")
 
         original_deserialize = Customer.deserialize
         Customer.deserialize = mock_deserialize
@@ -192,3 +247,36 @@ class TestYourResourceService(TestCase):
 
         # Restore original method
         Customer.deserialize = original_deserialize
+
+
+######################################################################
+#  T E S T   S A D   P A T H S
+######################################################################
+
+
+class TestSadPaths(TestCase):
+    """Test REST Exception Handling"""
+
+    def setUp(self):
+        """Runs before each test"""
+        self.client = app.test_client()
+
+    def test_method_not_allowed(self):
+        """It should not allow update without a customer id"""
+        response = self.client.put(BASE_URL)
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_create_customer_no_data(self):
+        """It should not Create a Customer with missing data"""
+        response = self.client.post(BASE_URL, json={})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_customer_no_content_type(self):
+        """It should not Create a Customer with no content type"""
+        response = self.client.post(BASE_URL)
+        self.assertEqual(response.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
+    def test_create_customer_wrong_content_type(self):
+        """It should not Create a Customer with the wrong content type"""
+        response = self.client.post(BASE_URL, data="hello", content_type="text/html")
+        self.assertEqual(response.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
