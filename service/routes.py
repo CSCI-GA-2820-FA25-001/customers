@@ -128,3 +128,76 @@ def delete_customer(customer_id):
             raise InternalServerError(str(err)) from err
 
     return "", status.HTTP_204_NO_CONTENT
+
+
+######################################################################
+# UPDATE A CUSTOMER
+######################################################################
+@app.route("/customers/<customer_id>", methods=["PUT"])
+def update_customer(customer_id):
+    """Update an existing Customer record by id.
+
+    Updatable fields: first_name, last_name, address
+    - All provided fields must be non-empty strings after trimming whitespace
+    - The 'id' field cannot be updated
+    - Partial updates are allowed (only provided fields are changed)
+    """
+    if not str(customer_id).isdigit():
+        raise BadRequest("customer id must be an integer")
+    customer_id = int(customer_id)
+
+    try:
+        data = request.get_json()
+    except BadRequest as e:
+        raise BadRequest("No input data provided") from e
+
+    if data is None:
+        raise BadRequest("No input data provided")
+
+    if "id" in data:
+        raise BadRequest("id cannot be updated")
+
+    allowed_fields = {"first_name", "last_name", "address"}
+    incoming = {k: v for k, v in data.items() if k in allowed_fields}
+
+    if not incoming:
+        customer = Customer.find(customer_id)
+        if not customer:
+            raise NotFound("customer not found")
+        return jsonify(customer.serialize()), status.HTTP_200_OK
+
+    invalid_fields = []
+    cleaned = {}
+    for key, value in incoming.items():
+        if not isinstance(value, str) or not value.strip():
+            invalid_fields.append(key)
+        else:
+            cleaned[key] = value.strip()
+
+    if invalid_fields:
+        raise BadRequest(
+            f"invalid or empty fields: {', '.join(sorted(invalid_fields))}"
+        )
+
+    try:
+        customer = Customer.find(customer_id)
+    except Exception as err:
+        app.logger.exception("Unexpected error locating customer %s", customer_id)
+        raise InternalServerError(str(err)) from err
+
+    if not customer:
+        raise NotFound("customer not found")
+
+    try:
+        current = customer.serialize()
+        current.update(cleaned)
+        customer.deserialize(current)
+        customer.update()
+        return jsonify(customer.serialize()), status.HTTP_200_OK
+
+    except DataValidationError as e:
+        app.logger.error("Data validation error during update: %s", e)
+        raise BadRequest(str(e)) from e
+    except Exception as e:
+        app.logger.exception("Unexpected error updating customer %s", customer_id)
+        raise InternalServerError(str(e)) from e

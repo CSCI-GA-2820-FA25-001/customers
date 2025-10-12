@@ -80,29 +80,28 @@ class Customer(db.Model):
             "address": self.address,
         }
 
-    def deserialize(self, data: dict):
+    def deserialize(self, data: dict, partial: bool = False):
         """
         Deserializes a Customer from a dictionary
         Args:
-            data (dict): A dictionary containing the Customer data
+            data (dict): Customer data
+            partial (bool): If True, only provided fields are validated/set
         """
         try:
-            # Validate required fields exist
-            for field in ["first_name", "last_name", "address"]:
-                if field not in data:
-                    raise KeyError(field)
+            fields = ["first_name", "last_name", "address"]
 
-            # Validate types
-            for field in ["first_name", "last_name", "address"]:
-                if not isinstance(data[field], str):
-                    raise DataValidationError(
-                        f"Invalid type for {field}: must be a string"
-                    )
+            if not partial:
+                for field in fields:
+                    if field not in data:
+                        raise KeyError(field)
 
-            # Assign data
-            self.first_name = data["first_name"]
-            self.last_name = data["last_name"]
-            self.address = data["address"]
+            for field in fields:
+                if field in data:
+                    if not isinstance(data[field], str) or not data[field].strip():
+                        raise DataValidationError(
+                            f"Invalid value for {field}: must be a non-empty string"
+                        )
+                    setattr(self, field, data[field].strip())
 
         except AttributeError as error:
             raise DataValidationError("Invalid attribute: " + error.args[0]) from error
@@ -131,7 +130,7 @@ class Customer(db.Model):
     def find(cls, by_id):
         """Finds a Customer by its ID"""
         logger.info("Processing lookup for id %s ...", by_id)
-        return cls.query.get(by_id)
+        return db.session.get(cls, by_id)
 
     @classmethod
     def find_by_name(cls, first_name, last_name=None):
