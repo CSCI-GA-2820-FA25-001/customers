@@ -96,6 +96,12 @@ class Customer(db.Model):
             self.address = data.get("address", "")
         except KeyError as error:
             raise DataValidationError(f"Missing {error.args[0]}") from error
+        if not isinstance(self.first_name, str):
+            raise DataValidationError("Invalid type for first_name: must be a string")
+        if not isinstance(self.last_name, str):
+            raise DataValidationError("Invalid type for last_name: must be a string")
+        if not isinstance(self.address, str):
+            raise DataValidationError("Invalid type for address: must be a string")
         return self
 
     ##################################################

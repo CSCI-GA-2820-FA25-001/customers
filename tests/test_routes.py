@@ -143,3 +143,52 @@ class TestYourResourceService(TestCase):
         data = resp.get_json()
         self.assertEqual(data["error"], "Bad Request")
         self.assertIn("must be an integer", data["message"])
+
+    def test_list_customers_success(self):
+        """It should successfully list all customers"""
+        c1 = Customer(first_name="Alice", last_name="Smith", address="123 Main St")
+        c2 = Customer(first_name="Bob", last_name="Jones", address="456 Elm St")
+        c1.create()
+        c2.create()
+
+        resp = self.client.get("/customers")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+        self.assertGreaterEqual(len(data), 2)
+        first_names = [c["first_name"] for c in data]
+        self.assertIn("Alice", first_names)
+        self.assertIn("Bob", first_names)
+
+    def test_list_customers_internal_error(self):
+        """It should handle internal server errors when listing customers"""
+        # pylint: disable=too-few-public-methods
+        class MockQuery:
+            """Class for database failures"""
+            def all(self):
+                """Raises exception for database failures"""
+                raise Exception("Database failure") # pylint: disable=broad-exception-raised
+        original_query = Customer.query
+        Customer.query = MockQuery()  # Replace the entire query object
+        resp = self.client.get("/customers")
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        data = resp.get_json()
+        self.assertIn("Internal Server Error", data["error"])
+        Customer.query = original_query
+    def test_create_customer_with_exception(self):
+        """It should return 500 when an unexpected exception occurs during creation"""
+        # Monkeypatch Customer.deserialize to raise a general Exception
+        def mock_deserialize(_):
+            raise Exception("Unexpected error")  # pylint: disable=broad-exception-raised
+
+        original_deserialize = Customer.deserialize
+        Customer.deserialize = mock_deserialize
+
+        payload = {"first_name": "Error", "last_name": "Case", "address": "Test"}
+        resp = self.client.post("/customers", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Internal Server Error")
+
+        # Restore original method
+        Customer.deserialize = original_deserialize

@@ -92,15 +92,21 @@ def get_customer(customer_id):
 
 @app.route("/customers", methods=["GET"])
 def list_customers():
-    """Returns a list of all Customers"""
-    app.logger.info("Request to list all customers")
+    """Returns a list of all customers"""
+    # pylint: disable=broad-exception-caught
     try:
         customers = Customer.query.all()
         results = [customer.serialize() for customer in customers]
         return jsonify(results), status.HTTP_200_OK
     except Exception as e:
-        app.logger.exception("Error fetching customers: %s", e)
-        raise InternalServerError(str(e)) from e
+        app.logger.error(f"Unexpected error while listing customers: {e}")
+        return (
+            jsonify({
+                "error": "Internal Server Error",
+                "message": str(e)
+            }),
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 @app.route("/customers/<customer_id>", methods=["DELETE"])
