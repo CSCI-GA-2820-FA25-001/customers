@@ -159,6 +159,175 @@ class TestYourResourceService(TestCase):
         self.assertIn("missing last_name", body.get("message", ""))
 
     # ----------------------------------------------------------
+    # TEST UPDATE (PUT /customers/{id})
+    # ----------------------------------------------------------
+
+    def test_update_customer_success(self):
+        """It should update an existing customer and return 200 with updated JSON"""
+        customer = self._create_customers(1)[0]
+        cust_id = customer.id
+
+        payload = {
+            "first_name": "UpdatedFirst",
+            "last_name": "UpdatedLast",
+            "address": "987 New Address Ave",
+        }
+        resp = self.client.put(f"{BASE_URL}/{cust_id}", json=payload)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["id"], cust_id)
+        self.assertEqual(data["first_name"], payload["first_name"])
+        self.assertEqual(data["last_name"], payload["last_name"])
+        self.assertEqual(data["address"], payload["address"])
+
+        resp_get = self.client.get(f"{BASE_URL}/{cust_id}")
+        self.assertEqual(resp_get.status_code, status.HTTP_200_OK)
+        persisted = resp_get.get_json()
+        self.assertEqual(persisted["first_name"], "UpdatedFirst")
+        self.assertEqual(persisted["last_name"], "UpdatedLast")
+        self.assertEqual(persisted["address"], "987 New Address Ave")
+
+    def test_update_customer_partial_fields(self):
+        """It should allow updating only provided fields (e.g., just address)"""
+        customer = self._create_customers(1)[0]
+        cust_id = customer.id
+        original_first = customer.first_name
+        original_last = customer.last_name
+
+        payload = {"address": "42 Galaxy Way"}
+        resp = self.client.put(f"{BASE_URL}/{cust_id}", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["first_name"], original_first)
+        self.assertEqual(data["last_name"], original_last)
+        self.assertEqual(data["address"], "42 Galaxy Way")
+
+    def test_update_customer_not_found(self):
+        """It should return 404 when the customer does not exist"""
+        payload = {"first_name": "Nobody", "last_name": "Home", "address": "N/A"}
+        resp = self.client.put(f"{BASE_URL}/99999", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        body = resp.get_json()
+        self.assertIn("customer not found", body.get("message", "").lower())
+
+    def test_update_customer_invalid_data_whitespace(self):
+        """It should return 400 when provided fields are empty after trimming"""
+        customer = self._create_customers(1)[0]
+        cust_id = customer.id
+
+        payload = {"address": "   "}
+        resp = self.client.put(f"{BASE_URL}/{cust_id}", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        data = resp.get_json()
+        self.assertEqual(data.get("error"), "Bad Request")
+        self.assertIn("address", data.get("message", "").lower())
+
+    def test_update_customer_reject_id_update(self):
+        """It should not allow updating the id field"""
+        customer = self._create_customers(1)[0]
+        cust_id = customer.id
+
+        payload = {
+            "id": cust_id + 1,
+            "first_name": "X",
+            "last_name": "Y",
+            "address": "Z",
+        }
+        resp = self.client.put(f"{BASE_URL}/{cust_id}", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        data = resp.get_json()
+        self.assertEqual(data.get("error"), "Bad Request")
+        self.assertIn("id", data.get("message", "").lower())
+
+    def test_update_customer_non_integer_id_returns_400(self):
+        """It should return 400 Bad Request when customer_id is not an integer"""
+        payload = {"first_name": "Foo", "last_name": "Bar", "address": "Baz"}
+        resp = self.client.put(f"{BASE_URL}/abc", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Bad Request")
+        self.assertIn("must be an integer", data["message"])
+
+    def test_update_customer_with_exception(self):
+        """It should return 500 when an unexpected exception occurs during update"""
+
+        def mock_deserialize(_self, data):
+            raise RuntimeError("Unexpected error during update")
+
+        customer = self._create_customers(1)[0]
+        cust_id = customer.id
+
+        original_deserialize = Customer.deserialize
+        Customer.deserialize = mock_deserialize
+
+        try:
+            payload = {"first_name": "Boom", "last_name": "Crash", "address": "Bang"}
+            resp = self.client.put(f"{BASE_URL}/{cust_id}", json=payload)
+            self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+            data = resp.get_json()
+            self.assertEqual(data["error"], "Internal Server Error")
+        finally:
+            Customer.deserialize = original_deserialize
+
+    def test_update_customer_no_input_data_returns_400(self):
+        """It should return 400 when no input data is provided"""
+        c = self._create_customers(1)[0]
+        resp = self.client.put(
+            f"{BASE_URL}/{c.id}", data="", content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        data = resp.get_json()
+        self.assertIn("No input data provided", data["message"])
+
+    def test_update_customer_no_updatable_fields_returns_existing(self):
+        """It should return existing record when no updatable fields are given"""
+        c = self._create_customers(1)[0]
+        resp = self.client.put(f"{BASE_URL}/{c.id}", json={})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["id"], c.id)
+        self.assertEqual(data["first_name"], c.first_name)
+        self.assertEqual(data["last_name"], c.last_name)
+        self.assertEqual(data["address"], c.address)
+
+    def test_update_customer_find_raises_exception_returns_500(self):
+        """It should return 500 when Customer.find raises an unexpected exception"""
+        c = self._create_customers(1)[0]
+        original_find = Customer.find
+
+        def boom(_):
+            raise RuntimeError("DB exploded")
+
+        Customer.find = staticmethod(boom)
+        try:
+            payload = {"first_name": "A", "last_name": "B", "address": "C"}
+            resp = self.client.put(f"{BASE_URL}/{c.id}", json=payload)
+            self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+            self.assertEqual(resp.get_json()["error"], "Internal Server Error")
+        finally:
+            Customer.find = original_find
+
+    def test_update_customer_datavalidation_error_returns_400(self):
+        """It should return 400 when a DataValidationError occurs during update"""
+        from service.models import DataValidationError
+
+        c = self._create_customers(1)[0]
+        original_deserialize = Customer.deserialize
+
+        def bad_deserialize(self, data):
+            raise DataValidationError("bad data in update")
+
+        Customer.deserialize = bad_deserialize
+        try:
+            payload = {"first_name": "X", "last_name": "Y", "address": "Z"}
+            resp = self.client.put(f"{BASE_URL}/{c.id}", json=payload)
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn("bad data", resp.get_json()["message"])
+        finally:
+            Customer.deserialize = original_deserialize
+
+    # ----------------------------------------------------------
     # TEST DELETE
     # ----------------------------------------------------------
 
