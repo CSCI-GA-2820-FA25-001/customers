@@ -140,3 +140,17 @@ class Customer(db.Model):
         if last_name:
             query = query.filter(cls.last_name == last_name)
         return query.all()
+
+    @classmethod
+    def find_by_address(cls, address: str) -> list:
+        """Returns all of the Customers at an address
+
+        :param category: the address of the Customer(s) you want to match
+        :type category: str
+
+        :return: a collection of Customers at that address
+        :rtype: list
+
+        """
+        logger.info("Processing address query for %s ...", address)
+        return cls.query.filter(cls.address == address)

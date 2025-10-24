@@ -172,27 +172,6 @@ class TestCustomer(TestCase):
         customer = Customer()
         self.assertRaises(DataValidationError, customer.deserialize, data)
 
-    def test_find_customer(self):
-        """It should find a Customer by ID"""
-        customers = CustomerFactory.create_batch(2)
-        for customer in customers:
-            customer.create()
-
-        found = Customer.find(customers[0].id)
-        self.assertIsNotNone(found)
-        self.assertEqual(found.id, customers[0].id)
-
-    def test_find_by_name(self):
-        """It should find customers by name"""
-        customer1 = CustomerFactory(first_name="Arushi", last_name="Srivastava")
-        customer2 = CustomerFactory(first_name="Alex", last_name="Chen")
-        customer1.create()
-        customer2.create()
-
-        results = Customer.find_by_name("Arushi")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].first_name, "Arushi")
-
     def test_repr(self):
         """It should return a string representation of the Customer"""
         customer = CustomerFactory()
@@ -286,6 +265,34 @@ class TestCustomer(TestCase):
                     {"first_name": "John", "last_name": "Doe", "address": "123 Main"}
                 )
 
+
+######################################################################
+#  Q U E R Y   T E S T   C A S E S
+######################################################################
+class TestModelQueries(TestCustomer):
+    """Customer Model Query Tests"""
+
+    def test_find_customer(self):
+        """It should find a Customer by ID"""
+        customers = CustomerFactory.create_batch(2)
+        for customer in customers:
+            customer.create()
+
+        found = Customer.find(customers[0].id)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, customers[0].id)
+
+    def test_find_by_name(self):
+        """It should find customers by name"""
+        customer1 = CustomerFactory(first_name="Arushi", last_name="Srivastava")
+        customer2 = CustomerFactory(first_name="Alex", last_name="Chen")
+        customer1.create()
+        customer2.create()
+
+        results = Customer.find_by_name("Arushi")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].first_name, "Arushi")
+
     def test_find_by_name_with_last_name(self):
         """It should find customers by first and last name"""
         customer1 = CustomerFactory(first_name="John", last_name="Smith")
@@ -296,3 +303,15 @@ class TestCustomer(TestCase):
         results = Customer.find_by_name("John", "Smith")
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].last_name, "Smith")
+
+    def test_find_by_address(self):
+        """It should Find Customers by Address"""
+        customers = CustomerFactory.create_batch(10)
+        for customer in customers:
+            customer.create()
+        address = customers[0].address
+        count = len([customer for customer in customers if customer.address == address])
+        found = Customer.find_by_address(address)
+        self.assertEqual(found.count(), count)
+        for customer in found:
+            self.assertEqual(customer.address, address)
