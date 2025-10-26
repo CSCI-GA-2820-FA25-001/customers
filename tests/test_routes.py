@@ -449,3 +449,25 @@ class TestSadPaths(TestCase):
         """It should not Create a Customer with the wrong content type"""
         response = self.client.post(BASE_URL, data="hello", content_type="text/html")
         self.assertEqual(response.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
+######################################################################
+#  T E S T   QUERY CUSTOMER BY ATTRIBUTES
+######################################################################
+    def test_query_customers(self):
+        """It should query customers by attribute"""
+        # Create sample customers
+        customer1 = CustomerFactory(first_name="Alice", last_name="Smith", address="NY")
+        customer2 = CustomerFactory(first_name="Bob", last_name="Jones", address="CA")
+        customer1.create()
+        customer2.create()
+
+        resp = self.client.get("/customers?last_name=Smith")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["first_name"], "Alice")
+
+    def test_query_invalid_param(self):
+        """It should return 400 for invalid query param"""
+        resp = self.client.get("/customers?invalidField=value")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
