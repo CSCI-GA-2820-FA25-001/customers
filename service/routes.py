@@ -93,18 +93,45 @@ def get_customer(customer_id):
 
 @app.route("/customers", methods=["GET"])
 def list_customers():
-    """Returns a list of all customers"""
+    """Returns a list of all customers
+    Example queries:
+      GET /customers
+      GET /customers?last_name=Smith
+      GET /customers?first_name=Alice&address=NY
+    """
     # pylint: disable=broad-exception-caught
     try:
-        customers = Customer.query.all()
+        query_params = request.args
+
+        if not query_params:
+            customers = Customer.all()
+        else:
+            # Validate and build filters
+            allowed_fields = {"first_name", "last_name", "address", "id"}
+            filters = {}
+
+            for key, value in query_params.items():
+                if key not in allowed_fields:
+                    raise BadRequest(f"Invalid query parameter: {key}")
+                filters[key] = value
+
+            query = Customer.query
+            for attr, val in filters.items():
+                column = getattr(Customer, attr)
+                if isinstance(val, str):
+                    query = query.filter(column.ilike(f"%{val}%"))
+                else:
+                    query = query.filter(column == val)
+            customers = query.all()
+
         results = [customer.serialize() for customer in customers]
         return jsonify(results), status.HTTP_200_OK
+
+    except BadRequest as e:
+        raise e
     except Exception as e:
         app.logger.error(f"Unexpected error while listing customers: {e}")
-        return (
-            jsonify({"error": "Internal Server Error", "message": str(e)}),
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        raise InternalServerError(str(e)) from e
 
 
 @app.route("/customers/<customer_id>", methods=["DELETE"])
