@@ -24,7 +24,7 @@ import logging
 from unittest import TestCase
 from wsgi import app
 from service.common import status
-from service.models import db, Customer
+from service.models import db, Customer, DataValidationError
 from tests.factories import CustomerFactory
 
 DATABASE_URI = os.getenv(
@@ -310,8 +310,6 @@ class TestYourResourceService(TestCase):
 
     def test_update_customer_datavalidation_error_returns_400(self):
         """It should return 400 when a DataValidationError occurs during update"""
-        from service.models import DataValidationError
-
         c = self._create_customers(1)[0]
         original_deserialize = Customer.deserialize
 
@@ -417,6 +415,80 @@ class TestYourResourceService(TestCase):
         # Restore original method
         Customer.deserialize = original_deserialize
 
+    def test_update_status_happy_path(self):
+        """It should set status to a valid new value and return 200"""
+        c = self._create_customers(1)[0]
+        resp = self.client.put(f"{BASE_URL}/{c.id}/status", json={"status": "deactivated"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        body = resp.get_json()
+        self.assertEqual(body["id"], c.id)
+        self.assertEqual(body["status"], "deactivated")
+
+    def test_update_status_idempotent(self):
+        """It should be idempotent (setting same status returns 200 and unchanged)"""
+        c = Customer(first_name="A", last_name="B", address="X")
+        c.create()
+        # first set
+        self.client.put(f"{BASE_URL}/{c.id}/status", json={"status": "suspended"})
+        # set again to same value
+        resp = self.client.put(f"{BASE_URL}/{c.id}/status", json={"status": "suspended"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json()["status"], "suspended")
+
+    def test_update_status_unsupported_value(self):
+        """It should return 400 for unsupported status value"""
+        c = self._create_customers(1)[0]
+        resp = self.client.put(f"{BASE_URL}/{c.id}/status", json={"status": "frozen"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        body = resp.get_json()
+        self.assertEqual(body["error"], "Bad Request")
+        self.assertIn("unsupported status", body["message"])
+
+    def test_update_status_missing_field(self):
+        """It should return 400 when 'status' field is missing"""
+        c = self._create_customers(1)[0]
+        resp = self.client.put(f"{BASE_URL}/{c.id}/status", json={})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        body = resp.get_json()
+        self.assertEqual(body["error"], "Bad Request")
+        self.assertIn("status", body["message"].lower())
+
+    def test_update_status_no_json(self):
+        """It should return 400 when no JSON body is provided"""
+        c = self._create_customers(1)[0]
+        resp = self.client.put(f"{BASE_URL}/{c.id}/status", data="", content_type="application/json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("status", resp.get_json()["message"].lower())
+
+    def test_update_status_non_integer_id(self):
+        """It should return 400 when id is not an integer"""
+        resp = self.client.put(f"{BASE_URL}/abc/status", json={"status": "active"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        body = resp.get_json()
+        self.assertEqual(body["error"], "Bad Request")
+        self.assertIn("must be an integer", body["message"])
+
+    def test_update_status_not_found(self):
+        """It should return 404 when the customer does not exist"""
+        resp = self.client.put(f"{BASE_URL}/999999/status", json={"status": "active"})
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn("customer not found", resp.get_json().get("message", "").lower())
+
+    def test_update_status_internal_error_during_find(self):
+        """It should return 500 when an unexpected error occurs during lookup"""
+        c = self._create_customers(1)[0]
+        original_find = Customer.find
+
+        def boom(_):
+            raise RuntimeError("DB exploded")
+
+        Customer.find = staticmethod(boom)
+        try:
+            resp = self.client.put(f"{BASE_URL}/{c.id}/status", json={"status": "active"})
+            self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+            self.assertEqual(resp.get_json()["error"], "Internal Server Error")
+        finally:
+            Customer.find = original_find
 
 ######################################################################
 #  T E S T   S A D   P A T H S

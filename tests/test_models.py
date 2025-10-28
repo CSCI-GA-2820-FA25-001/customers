@@ -315,3 +315,46 @@ class TestModelQueries(TestCustomer):
         self.assertEqual(found.count(), count)
         for customer in found:
             self.assertEqual(customer.address, address)
+
+    def test_default_status_on_create(self):
+        """It should default new customers to 'active' status"""
+        c = CustomerFactory()
+        c.create()
+        self.assertEqual(c.status, "active")
+
+    def test_set_status_valid_values(self):
+        """It should accept valid statuses and persist them on update"""
+        c = CustomerFactory()
+        c.create()
+        for new_status in ("active", "deactivated", "suspended"):
+            c.set_status(new_status)
+            c.update()
+            refreshed = Customer.find(c.id)
+            self.assertEqual(refreshed.status, new_status)
+
+    def test_set_status_invalid_value_raises(self):
+        """It should raise DataValidationError for invalid statuses"""
+        c = CustomerFactory()
+        c.create()
+        with self.assertRaises(DataValidationError):
+            c.set_status("frozen")
+
+    def test_deserialize_with_status(self):
+        """It should accept 'status' in deserialize and set it"""
+        c = Customer()
+        payload = {
+            "first_name": "Jane",
+            "last_name": "Doe",
+            "address": "1 Main St",
+            "status": "suspended",
+        }
+        c.deserialize(payload)
+        self.assertEqual(c.status, "suspended")
+
+    def test_serialize_includes_status(self):
+        """It should include 'status' in serialize"""
+        c = CustomerFactory()
+        c.set_status("deactivated")
+        data = c.serialize()
+        self.assertIn("status", data)
+        self.assertEqual(data["status"], "deactivated")
