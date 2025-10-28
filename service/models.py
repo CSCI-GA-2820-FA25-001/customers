@@ -12,6 +12,8 @@ logger = logging.getLogger("flask.app")
 # Create the SQLAlchemy object to be initialized later in init_db()
 db = SQLAlchemy()
 
+ALLOWED_STATUSES = {"active", "deactivated", "suspended"}
+
 
 class DataValidationError(Exception):
     """Used for data validation errors when deserializing"""
@@ -29,6 +31,7 @@ class Customer(db.Model):
     first_name = db.Column(db.String(63))
     last_name = db.Column(db.String(63))
     address = db.Column(db.String(256))
+    status = db.Column(db.String(32), default="active", nullable=False)
 
     # Additional columns for the Customer model can be added here.
 
@@ -37,9 +40,8 @@ class Customer(db.Model):
 
     def create(self):
         """
-        Creates a Customer to the database
+        Creates a Customer in the database
         """
-        # logger.info("Creating %s %s", self.first_name, self.last_name)
         try:
             db.session.add(self)
             db.session.commit()
@@ -52,11 +54,10 @@ class Customer(db.Model):
 
     def update(self):
         """
-        Updates a Customer to the database
+        Updates a Customer in the database
         """
         if not self.id:
             raise DataValidationError("Update called with empty ID field")
-
         logger.info("Updating customer %s", self.first_name)
         db.session.commit()
 
@@ -71,6 +72,13 @@ class Customer(db.Model):
             logger.error("Error deleting record: %s", self)
             raise DataValidationError(e) from e
 
+    def set_status(self, new_status: str):
+        """Validate and set status."""
+        if new_status not in ALLOWED_STATUSES:
+            raise DataValidationError(f"Invalid status '{new_status}'")
+        self.status = new_status
+        return self
+
     def serialize(self):
         """Serializes a Customer into a dictionary"""
         return {
@@ -78,11 +86,13 @@ class Customer(db.Model):
             "first_name": self.first_name,
             "last_name": self.last_name,
             "address": self.address,
+            "status": self.status,
         }
 
-    def deserialize(self, data: dict, partial: bool = False):
+    def deserialize(self, data: dict, partial: bool = False):  # noqa: C901
         """
-        Deserializes a Customer from a dictionary
+        Deserializes a Customer from a dictionary.
+
         Args:
             data (dict): Customer data
             partial (bool): If True, only provided fields are validated/set
@@ -97,11 +107,15 @@ class Customer(db.Model):
 
             for field in fields:
                 if field in data:
-                    if not isinstance(data[field], str) or not data[field].strip():
+                    value = data[field]
+                    if not isinstance(value, str) or not value.strip():
                         raise DataValidationError(
                             f"Invalid value for {field}: must be a non-empty string"
                         )
-                    setattr(self, field, data[field].strip())
+                    setattr(self, field, value.strip())
+
+            if "status" in data:
+                self.set_status(data["status"])
 
         except AttributeError as error:
             raise DataValidationError("Invalid attribute: " + error.args[0]) from error
@@ -142,15 +156,12 @@ class Customer(db.Model):
         return query.all()
 
     @classmethod
-    def find_by_address(cls, address: str) -> list:
+    def find_by_address(cls, address: str):
         """Returns all of the Customers at an address
 
-        :param category: the address of the Customer(s) you want to match
-        :type category: str
-
-        :return: a collection of Customers at that address
-        :rtype: list
-
+        :param address: the address of the Customer(s) you want to match
+        :type address: str
+        :return: a query for Customers at that address
         """
         logger.info("Processing address query for %s ...", address)
         return cls.query.filter(cls.address == address)

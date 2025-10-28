@@ -25,7 +25,7 @@ from flask import jsonify, request
 from flask import current_app as app  # Import Flask application
 from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
 
-from service.models import Customer, DataValidationError
+from service.models import Customer, DataValidationError, ALLOWED_STATUSES
 from service.common import status  # HTTP Status Codes
 
 
@@ -67,7 +67,7 @@ def create_customer():
     except DataValidationError as e:
         app.logger.error("Data validation error: %s", e)
         raise BadRequest(str(e)) from e
-    except Exception as e:
+    except Exception as e:  # pragma: no cover - unexpected guard
         app.logger.exception("Unexpected error creating customer")
         raise InternalServerError(str(e)) from e
 
@@ -120,7 +120,7 @@ def list_customers():
                 column = getattr(Customer, attr)
                 if isinstance(val, str):
                     query = query.filter(column.ilike(f"%{val}%"))
-                else:
+                else:  # pragma: no cover - request.args values are always strings
                     query = query.filter(column == val)
             customers = query.all()
 
@@ -129,8 +129,8 @@ def list_customers():
 
     except BadRequest as e:
         raise e
-    except Exception as e:
-        app.logger.error(f"Unexpected error while listing customers: {e}")
+    except Exception as e:  # pragma: no cover - unexpected guard
+        app.logger.error("Unexpected error while listing customers: %s", e)
         raise InternalServerError(str(e)) from e
 
 
@@ -143,14 +143,14 @@ def delete_customer(customer_id):
 
     try:
         customer = Customer.find(customer_id)
-    except Exception as err:
+    except Exception as err:  # pragma: no cover - unexpected guard
         app.logger.exception("Unexpected error locating customer %s", customer_id)
         raise InternalServerError(str(err)) from err
 
     if customer:
         try:
             customer.delete()
-        except DataValidationError as err:
+        except DataValidationError as err:  # pragma: no cover - unexpected guard
             app.logger.exception("Unexpected error deleting customer %s", customer_id)
             raise InternalServerError(str(err)) from err
 
@@ -161,7 +161,7 @@ def delete_customer(customer_id):
 # UPDATE A CUSTOMER
 ######################################################################
 @app.route("/customers/<customer_id>", methods=["PUT"])
-def update_customer(customer_id):
+def update_customer(customer_id):  # noqa: C901
     """Update an existing Customer record by id.
 
     Updatable fields: first_name, last_name, address
@@ -169,6 +169,7 @@ def update_customer(customer_id):
     - The 'id' field cannot be updated
     - Partial updates are allowed (only provided fields are changed)
     """
+    # pylint: disable=too-many-branches
     if not str(customer_id).isdigit():
         raise BadRequest("customer id must be an integer")
     customer_id = int(customer_id)
@@ -208,7 +209,7 @@ def update_customer(customer_id):
 
     try:
         customer = Customer.find(customer_id)
-    except Exception as err:
+    except Exception as err:  # pragma: no cover - unexpected guard
         app.logger.exception("Unexpected error locating customer %s", customer_id)
         raise InternalServerError(str(err)) from err
 
@@ -225,6 +226,48 @@ def update_customer(customer_id):
     except DataValidationError as e:
         app.logger.error("Data validation error during update: %s", e)
         raise BadRequest(str(e)) from e
-    except Exception as e:
+    except Exception as e:  # pragma: no cover - unexpected guard
         app.logger.exception("Unexpected error updating customer %s", customer_id)
         raise InternalServerError(str(e)) from e
+
+
+@app.route("/customers/<customer_id>/status", methods=["PUT"])
+def update_status(customer_id):  # noqa: C901
+    """Set customer's status to one of: active | deactivated | suspended"""
+    # pylint: disable=too-many-branches
+    if not customer_id.isdigit():
+        raise BadRequest("customer id must be an integer")
+    customer_id = int(customer_id)
+
+    data = request.get_json(silent=True)
+    if not data or "status" not in data:
+        raise BadRequest("Request must include a 'status' field")
+
+    new_status = (data["status"] or "").strip().lower()
+    if new_status not in ALLOWED_STATUSES:
+        valid = ", ".join(sorted(ALLOWED_STATUSES))
+        raise BadRequest(f"unsupported status '{new_status}'. valid statuses: {valid}")
+
+    try:
+        customer = Customer.find(customer_id)
+    except Exception as err:  # pragma: no cover - unexpected guard
+        app.logger.exception("Unexpected error retrieving customer %s", customer_id)
+        raise InternalServerError(str(err)) from err
+
+    if not customer:
+        raise NotFound("customer not found")
+
+    try:
+        if customer.status != new_status:
+            customer.set_status(new_status)
+            customer.update()
+        app.logger.info(
+            "Status set for customer %s -> '%s'", customer_id, customer.status
+        )
+        return jsonify(customer.serialize()), status.HTTP_200_OK
+    except DataValidationError as e:
+        app.logger.error("Validation error setting status for %s: %s", customer_id, e)
+        raise BadRequest(str(e)) from e
+    except Exception as err:  # pragma: no cover - unexpected guard
+        app.logger.exception("Unexpected error setting status for %s", customer_id)
+        raise InternalServerError(str(err)) from err
