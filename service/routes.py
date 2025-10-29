@@ -96,9 +96,44 @@ def list_customers():
     """Returns a list of all customers"""
     # pylint: disable=broad-exception-caught
     try:
-        customers = Customer.query.all()
+        args = request.args
+
+        # If no query parameters provided, return all customers
+        if not args:
+            customers = Customer.query.all()
+            results = [customer.serialize() for customer in customers]
+            return jsonify(results), status.HTTP_200_OK
+
+        # Validate query parameter names
+        allowed_params = {"first_name", "last_name", "address"}
+        invalid = [k for k in args.keys() if k not in allowed_params]
+        if invalid:
+            raise BadRequest(
+                f"Invalid query parameter(s): {', '.join(sorted(invalid))}"
+            )
+
+        # Build the base query
+        query = Customer.query
+
+        # Apply filters (AND logic)
+        first_name = args.get("first_name")
+        if first_name:
+            query = query.filter(Customer.first_name == first_name)
+
+        last_name = args.get("last_name")
+        if last_name:
+            query = query.filter(Customer.last_name == last_name)
+
+        address = args.get("address")
+        if address:
+            query = query.filter(Customer.address.ilike(f"%{address}%"))
+
+        customers = query.all()
         results = [customer.serialize() for customer in customers]
         return jsonify(results), status.HTTP_200_OK
+
+    except BadRequest:
+        raise
     except Exception as e:
         app.logger.error(f"Unexpected error while listing customers: {e}")
         return (

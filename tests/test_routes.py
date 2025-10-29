@@ -417,6 +417,43 @@ class TestYourResourceService(TestCase):
         # Restore original method
         Customer.deserialize = original_deserialize
 
+    def test_list_customers_filter_lastname_address(self):
+        """It should filter customers by last_name and address (AND logic)"""
+        c1 = Customer(first_name="Anna", last_name="Smith", address="123 Boston Ave")
+        c2 = Customer(first_name="Ben", last_name="Smith", address="456 Chicago St")
+        c3 = Customer(first_name="Cara", last_name="Jones", address="789 Boston Rd")
+        c1.create()
+        c2.create()
+        c3.create()
+
+        resp = self.client.get(f"{BASE_URL}?last_name=Smith&address=Boston")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["last_name"], "Smith")
+        self.assertIn("Boston", data[0]["address"])
+
+    def test_list_customers_no_matches_returns_empty(self):
+        """It should return an empty list when no customers match the filters"""
+        c1 = Customer(first_name="Dave", last_name="Brown", address="1 A St")
+        c1.create()
+
+        resp = self.client.get(f"{BASE_URL}?last_name=NonExistent")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 0)
+
+    def test_list_customers_invalid_query_param_returns_400(self):
+        """It should return 400 Bad Request for unknown query parameters"""
+        resp = self.client.get(f"{BASE_URL}?invalidParam=value")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        data = resp.get_json()
+        self.assertEqual(data.get("error"), "Bad Request")
+        self.assertIn("invalidParam", data.get("message", ""))
+
 
 ######################################################################
 #  T E S T   S A D   P A T H S
