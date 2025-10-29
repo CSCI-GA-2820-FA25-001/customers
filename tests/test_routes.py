@@ -418,7 +418,9 @@ class TestYourResourceService(TestCase):
     def test_update_status_happy_path(self):
         """It should set status to a valid new value and return 200"""
         c = self._create_customers(1)[0]
-        resp = self.client.put(f"{BASE_URL}/{c.id}/status", json={"status": "deactivated"})
+        resp = self.client.put(
+            f"{BASE_URL}/{c.id}/status", json={"status": "deactivated"}
+        )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         body = resp.get_json()
         self.assertEqual(body["id"], c.id)
@@ -431,7 +433,9 @@ class TestYourResourceService(TestCase):
         # first set
         self.client.put(f"{BASE_URL}/{c.id}/status", json={"status": "suspended"})
         # set again to same value
-        resp = self.client.put(f"{BASE_URL}/{c.id}/status", json={"status": "suspended"})
+        resp = self.client.put(
+            f"{BASE_URL}/{c.id}/status", json={"status": "suspended"}
+        )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json()["status"], "suspended")
 
@@ -456,7 +460,9 @@ class TestYourResourceService(TestCase):
     def test_update_status_no_json(self):
         """It should return 400 when no JSON body is provided"""
         c = self._create_customers(1)[0]
-        resp = self.client.put(f"{BASE_URL}/{c.id}/status", data="", content_type="application/json")
+        resp = self.client.put(
+            f"{BASE_URL}/{c.id}/status", data="", content_type="application/json"
+        )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("status", resp.get_json()["message"].lower())
 
@@ -484,11 +490,14 @@ class TestYourResourceService(TestCase):
 
         Customer.find = staticmethod(boom)
         try:
-            resp = self.client.put(f"{BASE_URL}/{c.id}/status", json={"status": "active"})
+            resp = self.client.put(
+                f"{BASE_URL}/{c.id}/status", json={"status": "active"}
+            )
             self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
             self.assertEqual(resp.get_json()["error"], "Internal Server Error")
         finally:
             Customer.find = original_find
+
 
 ######################################################################
 #  T E S T   S A D   P A T H S
@@ -522,9 +531,9 @@ class TestSadPaths(TestCase):
         response = self.client.post(BASE_URL, data="hello", content_type="text/html")
         self.assertEqual(response.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
 
-######################################################################
-#  T E S T   QUERY CUSTOMER BY ATTRIBUTES
-######################################################################
+    ######################################################################
+    #  T E S T   QUERY CUSTOMER BY ATTRIBUTES
+    ######################################################################
     def test_query_customers(self):
         """It should query customers by attribute"""
         # Create sample customers
@@ -543,3 +552,74 @@ class TestSadPaths(TestCase):
         """It should return 400 for invalid query param"""
         resp = self.client.get("/customers?invalidField=value")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_query_customers_combined_snakecase(self):
+        """It should support snake_case query params and combine multiple filters with AND logic"""
+        customer1 = CustomerFactory(
+            first_name="John", last_name="Smith", address="Boston MA"
+        )
+        customer2 = CustomerFactory(
+            first_name="Jane", last_name="Smith", address="New York"
+        )
+        customer1.create()
+        customer2.create()
+
+        resp = self.client.get("/customers?last_name=Smith&address=Boston")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["first_name"], "John")
+
+    def test_query_customers_no_matches_returns_empty(self):
+        """It should return an empty list when no customers match the query"""
+        CustomerFactory(
+            first_name="Alice", last_name="Wonder", address="Paris"
+        ).create()
+        resp = self.client.get("/customers?last_name=NonExistent")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 0)
+
+    def test_query_customers_pagination(self):
+        """It should support pagination via limit and page parameters"""
+        for i in range(5):
+            CustomerFactory(
+                first_name=f"P{i}", last_name="Pagin", address="Addr"
+            ).create()
+
+        resp = self.client.get("/customers?last_name=Pagin&limit=2&page=2")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 2)
+
+    def test_query_id_non_integer_returns_400(self):
+        """It should return 400 when query id is not an integer"""
+        CustomerFactory(first_name="Z", last_name="Q", address="X").create()
+        resp = self.client.get("/customers?id=abc")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        data = resp.get_json()
+        self.assertEqual(data.get("error"), "Bad Request")
+        self.assertIn("id must be an integer", data.get("message", ""))
+
+    def test_query_limit_non_integer_returns_400(self):
+        """It should return 400 when limit is not an integer"""
+        CustomerFactory(first_name="L", last_name="M", address="N").create()
+        resp = self.client.get("/customers?limit=abc")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        data = resp.get_json()
+        self.assertEqual(data.get("error"), "Bad Request")
+        self.assertIn("limit must be an integer", data.get("message", ""))
+
+    def test_query_limit_non_positive_returns_400(self):
+        """It should return 400 when limit is not a positive integer"""
+        for i in range(3):
+            CustomerFactory(
+                first_name=f"N{i}", last_name="Pos", address="Addr"
+            ).create()
+        resp = self.client.get("/customers?limit=0&page=1")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        data = resp.get_json()
+        self.assertEqual(data.get("error"), "Bad Request")
+        self.assertIn("limit must be a positive integer", data.get("message", ""))

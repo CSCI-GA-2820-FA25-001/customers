@@ -108,9 +108,24 @@ def list_customers():
         else:
             # Validate and build filters
             allowed_fields = {"first_name", "last_name", "address", "id"}
+
+            # Pagination params
+            limit = None
+            page = None
+
             filters = {}
 
             for key, value in query_params.items():
+                if key in ("limit", "page"):
+                    try:
+                        if key == "limit":
+                            limit = int(value)
+                        else:
+                            page = int(value)
+                    except ValueError:
+                        raise BadRequest(f"{key} must be an integer")
+                    continue
+
                 if key not in allowed_fields:
                     raise BadRequest(f"Invalid query parameter: {key}")
                 filters[key] = value
@@ -118,11 +133,23 @@ def list_customers():
             query = Customer.query
             for attr, val in filters.items():
                 column = getattr(Customer, attr)
-                if isinstance(val, str):
+                if attr == "id":
+                    try:
+                        query = query.filter(column == int(val))
+                    except ValueError:
+                        raise BadRequest("id must be an integer")
+                else:
                     query = query.filter(column.ilike(f"%{val}%"))
-                else:  # pragma: no cover - request.args values are always strings
-                    query = query.filter(column == val)
-            customers = query.all()
+
+            if limit is not None:
+                if limit <= 0:
+                    raise BadRequest("limit must be a positive integer")
+                if page is None or page <= 0:
+                    page = 1
+                offset = (page - 1) * limit
+                customers = query.offset(offset).limit(limit).all()
+            else:
+                customers = query.all()
 
         results = [customer.serialize() for customer in customers]
         return jsonify(results), status.HTTP_200_OK
