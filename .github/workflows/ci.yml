@@ -57,3 +57,12 @@ jobs:
       - name: Run unit tests
         run: |
           pytest --disable-warnings --maxfail=1 --cov=service --cov-fail-under=90
+
+      - name: Install packages for Codecov to work
+        run: sudo apt update && sudo apt install -y git curl gpg
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: CSCI-GA-2820-FA25-001/customers
