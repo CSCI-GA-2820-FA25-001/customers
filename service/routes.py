@@ -28,10 +28,10 @@ from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
 from service.models import Customer, DataValidationError, ALLOWED_STATUSES
 from service.common import status  # HTTP Status Codes
 
-
 ######################################################################
 # GET INDEX
 ######################################################################
+
 @app.route("/")
 def index():
     """Root URL response"""
@@ -52,8 +52,13 @@ def index():
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
 
+@app.route("/health", methods=["GET"])
+def health():
+    """Health check endpoint for Kubernetes"""
+    return jsonify({"status": "OK"}), status.HTTP_200_OK
 
 @app.route("/customers", methods=["POST"])
+
 def create_customer():
     """Creates a new Customer record"""
     data = request.get_json()
