@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: customers-deployment
+  name: customers
   labels:
     app: customers
 spec:
@@ -15,17 +15,22 @@ spec:
         app: customers
     spec:
       containers:
-        - name: customers-service
-          image: your-dockerhub-username/customers:latest
+        - name: nyu-project
+          image: customers:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080
           env:
             - name: FLASK_ENV
-              value: production
+              value: "wsgi:app"
+            - name: FLASK_DEBUG
+              value: "True"
+            - name: GUNICORN_BIND
+              value: "0.0.0.0:8080"
             - name: PORT
               value: "8080"
             - name: DATABASE_URI
-              value: postgresql+psycopg://postgres:postgres@postgres:5432/postgres
+              value: "postgresql+psycopg://postgres:pgs3cr3t@postgres:5432/postgres"
           # 🩺 Health Checks
           livenessProbe:
             httpGet:
