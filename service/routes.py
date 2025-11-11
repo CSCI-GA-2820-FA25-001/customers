@@ -28,9 +28,11 @@ from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
 from service.models import Customer, DataValidationError, ALLOWED_STATUSES
 from service.common import status  # HTTP Status Codes
 
+
 ######################################################################
 # GET INDEX
 ######################################################################
+
 
 @app.route("/")
 def index():
@@ -52,13 +54,14 @@ def index():
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
 
+
 @app.route("/health", methods=["GET"])
 def health():
     """Health check endpoint for Kubernetes"""
     return jsonify({"status": "OK"}), status.HTTP_200_OK
 
-@app.route("/customers", methods=["POST"])
 
+@app.route("/customers", methods=["POST"])
 def create_customer():
     """Creates a new Customer record"""
     data = request.get_json()
@@ -127,8 +130,8 @@ def list_customers():
                             limit = int(value)
                         else:
                             page = int(value)
-                    except ValueError:
-                        raise BadRequest(f"{key} must be an integer")
+                    except ValueError as exc:
+                        raise BadRequest(f"{key} must be an integer") from exc
                     continue
 
                 if key not in allowed_fields:
@@ -141,8 +144,8 @@ def list_customers():
                 if attr == "id":
                     try:
                         query = query.filter(column == int(val))
-                    except ValueError:
-                        raise BadRequest("id must be an integer")
+                    except ValueError as exc:
+                        raise BadRequest("id must be an integer") from exc
                 else:
                     query = query.filter(column.ilike(f"%{val}%"))
 

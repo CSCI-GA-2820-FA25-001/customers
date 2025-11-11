@@ -624,9 +624,9 @@ class TestSadPaths(TestCase):
         self.assertEqual(data.get("error"), "Bad Request")
         self.assertIn("limit must be a positive integer", data.get("message", ""))
 
-######################################################################
+    ######################################################################
     #  T E S T   H E A L T H  E N D P O I N T
-######################################################################
+    ######################################################################
     def test_health_endpoint(self):
         """It should return 200 OK with status 'OK'"""
         resp = self.client.get("/health")
