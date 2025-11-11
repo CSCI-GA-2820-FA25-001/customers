@@ -43,8 +43,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-            python -m pip install --upgrade pip
-            pip install flask flask_sqlalchemy psycopg[binary] pytest pytest-cov pytest-pspec faker honcho factory_boy
+          python -m pip install --upgrade pip
+          pip install flask flask_sqlalchemy psycopg[binary] pytest pytest-cov pytest-pspec faker honcho factory_boy
 
 
       - name: Wait for PostgreSQL
@@ -57,6 +57,20 @@ jobs:
       - name: Run unit tests
         run: |
           pytest --disable-warnings --maxfail=1 --cov=service --cov-fail-under=90
+
+      - name: Install linting tools (flake8 & pylint)
+        run: |
+          pip install flake8 pylint
+
+      - name: Run flake8 (code style checks)
+        run: |
+          echo "Running flake8..."
+          flake8 . || { echo "flake8 found issues"; exit 1; }
+
+      - name: Run pylint (static analysis)
+        run: |
+          echo "Running pylint..."
+          pylint $(git ls-files '*.py')
 
       - name: Install packages for Codecov to work
         run: sudo apt update && sudo apt install -y git curl gpg
