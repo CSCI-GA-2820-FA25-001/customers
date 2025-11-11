@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+data:
+  01-init.sql: |
+    -- Runs on first bootstrap of the DB (postgres image scans /docker-entrypoint-initdb.d)
+    -- We set POSTGRES_DB=customers in the StatefulSet, so scripts will run against that DB.
+    CREATE TABLE IF NOT EXISTS healthcheck (
+      id INT PRIMARY KEY,
+      ok BOOLEAN NOT NULL
+    );
+    INSERT INTO healthcheck (id, ok)
+    VALUES (1, TRUE)
+    ON CONFLICT (id) DO NOTHING;

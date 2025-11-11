@@ -30,7 +30,10 @@ spec:
             - name: PORT
               value: "8080"
             - name: DATABASE_URI
-              value: "postgresql+psycopg://postgres:pgs3cr3t@postgres:5432/postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: DATABASE_URI
           # 🩺 Health Checks
           livenessProbe:
             httpGet:
