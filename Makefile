@@ -1,5 +1,5 @@
 # These can be overidden with env vars.
-REGISTRY ?=
+REGISTRY ?= localhost:5000
 IMAGE_NAME ?= customers
 IMAGE_TAG ?= latest
 IMAGE ?= $(if $(REGISTRY),$(REGISTRY)/,)$$(echo $(IMAGE_NAME)):$(IMAGE_TAG)
