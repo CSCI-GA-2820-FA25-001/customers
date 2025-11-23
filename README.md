@@ -197,6 +197,18 @@ Unit Tests - Test business logic in models.py
 
 Integration Tests - Test API endpoints in routes.py
 
+### Accessing the Service via Ingress
+
+The service is accessible through Traefik ingress on port 8080:
+```bash
+# With Host header
+curl -H "Host: customers.local" http://localhost:8080/health
+
+# Or add to /etc/hosts for browser access:
+echo "127.0.0.1 customers.local" | sudo tee -a /etc/hosts
+# Then visit: http://customers.local:8080
+```
+
 ### Development
 
 #### Code Quality

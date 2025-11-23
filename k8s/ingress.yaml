@@ -4,9 +4,8 @@ metadata:
   name: customers-ingress
   labels:
     app: customers
-  annotations:
-    kubernetes.io/ingress.class: nginx
 spec:
+  ingressClassName: traefik
   rules:
     - host: customers.local
       http:
