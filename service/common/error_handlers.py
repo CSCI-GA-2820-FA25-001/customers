@@ -20,7 +20,7 @@ from flask import jsonify
 from flask import current_app as app  # Import Flask application
 from service.models import DataValidationError
 from service.common import status
-
+from werkzeug.exceptions import HTTPException
 
 ######################################################################
 # Error Handlers
@@ -90,6 +90,33 @@ def internal_server_error(error):
     """Handles unexpected server error with 500_SERVER_ERROR"""
     message = str(error)
     app.logger.error(message)
+    return (
+        jsonify(
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            error="Internal Server Error",
+            message=message,
+        ),
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+    )
+#JSON error handling
+@app.errorhandler(HTTPException)
+def handle_http_exception(error):
+    """Ensure all Werkzeug HTTP exceptions return JSON"""
+    response = {
+        "status": error.code,
+        "error": error.name,
+        "message": error.description,
+    }
+    return jsonify(response), error.code
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_exception(error):
+    """Catch-all handler for unexpected exceptions (always JSON)"""
+    message = str(error) or "An unexpected error occurred."
+
+    app.logger.error(message)
+
     return (
         jsonify(
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
