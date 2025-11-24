@@ -25,6 +25,8 @@ from werkzeug.exceptions import HTTPException
 ######################################################################
 # Error Handlers
 ######################################################################
+
+
 @app.errorhandler(DataValidationError)
 def request_validation_error(error):
     """Handles Value Errors from bad data"""
@@ -98,7 +100,8 @@ def internal_server_error(error):
         ),
         status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
-#JSON error handling
+
+
 @app.errorhandler(HTTPException)
 def handle_http_exception(error):
     """Ensure all Werkzeug HTTP exceptions return JSON"""
