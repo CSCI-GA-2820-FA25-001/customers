@@ -59,3 +59,32 @@ Feature: Customer Listing UI
         When I create a new customer
         And I click the list button
         Then I should see the newly created customer in the list
+
+Feature: Customer Query Functionality
+    As a Developer
+    I need a user interface for querying customers
+    So that I can test the Query endpoint from the outside in using Selenium
+
+    Background:
+        Given the customer service is running
+        And I am on the customer admin page
+
+    Scenario: Query customers by last name
+        Given multiple customers exist with different last names
+        When I enter "Smith" into the last name search field
+        And I click the "Search" button
+        Then I should see only customers with last name "Smith"
+
+    Scenario: Query with no matching results
+        Given customers exist in the system
+        When I enter "NonExistent" into the last name search field
+        And I click the "Search" button
+        Then I should see an empty result list
+        And I should see the message "No customers found matching your search"
+
+    Scenario: Query with multiple criteria
+        Given multiple customers exist in the system
+        When I enter "Smith" into the last name search field
+        And I enter "Boston" into the address search field
+        And I click the "Search" button
+        Then I should see only customers matching last name "Smith" and address containing "Boston"
