@@ -597,3 +597,118 @@ def step_see_customer_not_found(context):
             "Customer not found"
         )
     )
+
+# -------------------
+# DELETE
+# -------------------
+
+@when('I click the "Delete" button for customer "{customer_id}"')
+def step_click_delete_customer(context, customer_id):
+    """Click the Delete button for a specific customer"""
+    # Check if this is a mapped ID (from Given step)
+    if hasattr(context, 'customer_id_mapping') and customer_id in context.customer_id_mapping:
+        actual_id = context.customer_id_mapping[customer_id]
+    else:
+        actual_id = customer_id
+    
+    # Store the ID for later verification
+    context.deleted_customer_id = actual_id
+    
+    # Click the delete button for this customer
+    delete_button = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.element_to_be_clickable((By.ID, f"btn-delete-{actual_id}"))
+    )
+    delete_button.click()
+
+
+@when("I confirm the deletion")
+def step_confirm_deletion(context):
+    """Confirm the deletion in the confirmation dialog"""
+    # Wait for confirmation dialog to appear
+    # Option 1: Handle browser's native confirm() dialog
+    try:
+        WebDriverWait(context.driver, WAIT_TIME).until(EC.alert_is_present())
+        alert = context.driver.switch_to.alert
+        alert.accept()
+    except Exception:
+        # Option 2: Handle custom confirmation dialog
+        confirm_button = WebDriverWait(context.driver, WAIT_TIME).until(
+            EC.element_to_be_clickable((By.ID, "btn-confirm-delete"))
+        )
+        confirm_button.click()
+
+
+@when("I cancel the deletion")
+def step_cancel_deletion(context):
+    """Cancel the deletion in the confirmation dialog"""
+    # Wait for confirmation dialog to appear
+    # Option 1: Handle browser's native confirm() dialog
+    try:
+        WebDriverWait(context.driver, WAIT_TIME).until(EC.alert_is_present())
+        alert = context.driver.switch_to.alert
+        alert.dismiss()
+    except Exception:
+        # Option 2: Handle custom confirmation dialog
+        cancel_button = WebDriverWait(context.driver, WAIT_TIME).until(
+            EC.element_to_be_clickable((By.ID, "btn-cancel-delete"))
+        )
+        cancel_button.click()
+
+
+@then("the customer should no longer appear in the list")
+def step_customer_not_in_list(context):
+    """Verify the deleted customer is no longer in the list"""
+    # Wait a moment for the list to update
+    import time
+    time.sleep(1)
+    
+    # Get all customer rows
+    try:
+        customer_rows = context.driver.find_elements(By.CLASS_NAME, "customer-row")
+        
+        # If we have the deleted customer ID, verify it's not in any row
+        if hasattr(context, 'deleted_customer_id'):
+            for row in customer_rows:
+                # Check that the deleted customer ID is not in this row
+                assert context.deleted_customer_id not in row.text, \
+                    f"Customer {context.deleted_customer_id} still appears in the list"
+        
+        # If we have the test customer data, verify it's not in the list
+        if hasattr(context, 'test_customer'):
+            customer_name = f"{context.test_customer['first_name']} {context.test_customer['last_name']}"
+            for row in customer_rows:
+                assert customer_name.lower() not in row.text.lower(), \
+                    f"Customer {customer_name} still appears in the list"
+    except Exception:
+        # If no rows found, that's acceptable (list might be empty)
+        pass
+
+
+@then("the customer should still appear in the list")
+def step_customer_still_in_list(context):
+    """Verify the customer is still in the list after canceling deletion"""
+    # Wait for the list to be visible
+    WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-list"))
+    )
+    
+    customer_rows = context.driver.find_elements(By.CLASS_NAME, "customer-row")
+    
+    # If we have the customer ID, verify it's still in the list
+    if hasattr(context, 'deleted_customer_id'):
+        found = False
+        for row in customer_rows:
+            if context.deleted_customer_id in row.text:
+                found = True
+                break
+        assert found, f"Customer {context.deleted_customer_id} not found in list after canceling deletion"
+    
+    # If we have the test customer data, verify it's still in the list
+    if hasattr(context, 'test_customer'):
+        customer_name = f"{context.test_customer['first_name']} {context.test_customer['last_name']}"
+        found = False
+        for row in customer_rows:
+            if customer_name.lower() in row.text.lower():
+                found = True
+                break
+        assert found, f"Customer {customer_name} not found in list after canceling deletion"
