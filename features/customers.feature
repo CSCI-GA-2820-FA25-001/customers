@@ -43,6 +43,47 @@ Feature: Customer User Interface
         Then I should see "Error: Customer not found"
 
     # ------------------------
+    # CREATE
+    # ------------------------
+
+    Scenario: Create a new customer
+        Given I am on the home page
+        When I fill in the customer form with valid data
+        And I click the "Create Customer" button
+        Then I should see a success message
+        And the new customer should appear in the customer list
+
+    Scenario: Create a customer with missing required fields
+        Given I am on the home page
+        When I fill in the customer form with incomplete data
+        And I click the "Create Customer" button
+        Then I should see an error message indicating which fields are required
+
+    Scenario: Create a customer with empty first name
+        Given I am on the home page
+        When I leave the first name field empty
+        And I fill in last name with "Smith"
+        And I fill in address with "123 Main St"
+        And I click the "Create Customer" button
+        Then I should see an error message "first_name is required"
+
+    Scenario: Create a customer with empty last name
+        Given I am on the home page
+        When I fill in first name with "John"
+        And I leave the last name field empty
+        And I fill in address with "123 Main St"
+        And I click the "Create Customer" button
+        Then I should see an error message "last_name is required"
+
+    Scenario: Create a customer with empty address
+        Given I am on the home page
+        When I fill in first name with "John"
+        And I fill in last name with "Smith"
+        And I leave the address field empty
+        And I click the "Create Customer" button
+        Then I should see an error message "address is required"
+
+    # ------------------------
     # LISTING
     # ------------------------
 
@@ -91,3 +132,60 @@ Feature: Customer User Interface
         And I enter "Boston" into the address search field
         And I click the "Search" button
         Then I should see only customers matching last name "Smith" and address containing "Boston"
+
+    # ------------------------
+    # READING
+    # ------------------------
+
+    Scenario: Read an existing customer
+        Given I am on the home page
+        And a customer exists with ID "12345"
+        When I search for customer ID "12345"
+        And I click the "View Details" button
+        Then I should see the complete customer information displayed
+
+    Scenario: Read a non-existing customer
+        Given I am on the home page
+        And no customer exists with ID "99999"
+        When I search for customer ID "99999"
+        Then I should see a "Customer not found" message
+
+    # ------------------------
+    # DELETE
+    # ------------------------
+
+    Scenario: Delete an existing customer
+        Given I am on the home page
+        And a customer exists with ID "12345"
+        When I click the "Delete" button for customer "12345"
+        And I confirm the deletion
+        Then I should see a success message
+        And the customer should no longer appear in the list
+
+    Scenario: Cancel customer deletion
+        Given I am on the home page
+        And a customer exists with ID "12345"
+        When I click the "Delete" button for customer "12345"
+        And I cancel the deletion
+        Then the customer should still appear in the list
+
+    # ------------------------
+    # UPDATE
+    # ------------------------
+
+    Scenario: Update an existing customer
+        Given I am on the home page
+        And a customer exists with ID "12345"
+        When I navigate to edit customer "12345"
+        And I update the customer's address to "123 New Street"
+        And I click the "Update" button
+        Then I should see a success message
+        And the customer's address should be updated in the list
+
+    Scenario: Update with invalid data
+        Given I am on the home page
+        And a customer exists with ID "12345"
+        When I navigate to edit customer "12345"
+        And I clear the required field "firstName"
+        And I click the "Update" button
+        Then I should see an error message about invalid data
