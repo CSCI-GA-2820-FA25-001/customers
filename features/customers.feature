@@ -91,3 +91,20 @@ Feature: Customer User Interface
         And I enter "Boston" into the address search field
         And I click the "Search" button
         Then I should see only customers matching last name "Smith" and address containing "Boston"
+
+    # ------------------------
+    # READING
+    # ------------------------
+
+    Scenario: Read an existing customer
+        Given I am on the home page
+        And a customer exists with ID "12345"
+        When I search for customer ID "12345"
+        And I click the "View Details" button
+        Then I should see the complete customer information displayed
+
+    Scenario: Read a non-existing customer
+        Given I am on the home page
+        And no customer exists with ID "99999"
+        When I search for customer ID "99999"
+        Then I should see a "Customer not found" message
