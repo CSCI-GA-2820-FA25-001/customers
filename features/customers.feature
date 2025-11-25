@@ -168,3 +168,24 @@ Feature: Customer User Interface
         When I click the "Delete" button for customer "12345"
         And I cancel the deletion
         Then the customer should still appear in the list
+
+    # ------------------------
+    # UPDATE
+    # ------------------------
+
+    Scenario: Update an existing customer
+        Given I am on the home page
+        And a customer exists with ID "12345"
+        When I navigate to edit customer "12345"
+        And I update the customer's address to "123 New Street"
+        And I click the "Update" button
+        Then I should see a success message
+        And the customer's address should be updated in the list
+
+    Scenario: Update with invalid data
+        Given I am on the home page
+        And a customer exists with ID "12345"
+        When I navigate to edit customer "12345"
+        And I clear the required field "firstName"
+        And I click the "Update" button
+        Then I should see an error message about invalid data

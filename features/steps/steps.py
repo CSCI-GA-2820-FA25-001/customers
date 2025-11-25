@@ -598,6 +598,7 @@ def step_see_customer_not_found(context):
         )
     )
 
+
 # -------------------
 # DELETE
 # -------------------
@@ -605,16 +606,13 @@ def step_see_customer_not_found(context):
 @when('I click the "Delete" button for customer "{customer_id}"')
 def step_click_delete_customer(context, customer_id):
     """Click the Delete button for a specific customer"""
-    # Check if this is a mapped ID (from Given step)
     if hasattr(context, 'customer_id_mapping') and customer_id in context.customer_id_mapping:
         actual_id = context.customer_id_mapping[customer_id]
     else:
         actual_id = customer_id
     
-    # Store the ID for later verification
     context.deleted_customer_id = actual_id
     
-    # Click the delete button for this customer
     delete_button = WebDriverWait(context.driver, WAIT_TIME).until(
         EC.element_to_be_clickable((By.ID, f"btn-delete-{actual_id}"))
     )
@@ -624,14 +622,11 @@ def step_click_delete_customer(context, customer_id):
 @when("I confirm the deletion")
 def step_confirm_deletion(context):
     """Confirm the deletion in the confirmation dialog"""
-    # Wait for confirmation dialog to appear
-    # Option 1: Handle browser's native confirm() dialog
     try:
         WebDriverWait(context.driver, WAIT_TIME).until(EC.alert_is_present())
         alert = context.driver.switch_to.alert
         alert.accept()
     except Exception:
-        # Option 2: Handle custom confirmation dialog
         confirm_button = WebDriverWait(context.driver, WAIT_TIME).until(
             EC.element_to_be_clickable((By.ID, "btn-confirm-delete"))
         )
@@ -641,14 +636,11 @@ def step_confirm_deletion(context):
 @when("I cancel the deletion")
 def step_cancel_deletion(context):
     """Cancel the deletion in the confirmation dialog"""
-    # Wait for confirmation dialog to appear
-    # Option 1: Handle browser's native confirm() dialog
     try:
         WebDriverWait(context.driver, WAIT_TIME).until(EC.alert_is_present())
         alert = context.driver.switch_to.alert
         alert.dismiss()
     except Exception:
-        # Option 2: Handle custom confirmation dialog
         cancel_button = WebDriverWait(context.driver, WAIT_TIME).until(
             EC.element_to_be_clickable((By.ID, "btn-cancel-delete"))
         )
@@ -658,43 +650,35 @@ def step_cancel_deletion(context):
 @then("the customer should no longer appear in the list")
 def step_customer_not_in_list(context):
     """Verify the deleted customer is no longer in the list"""
-    # Wait a moment for the list to update
     import time
     time.sleep(1)
     
-    # Get all customer rows
     try:
         customer_rows = context.driver.find_elements(By.CLASS_NAME, "customer-row")
         
-        # If we have the deleted customer ID, verify it's not in any row
         if hasattr(context, 'deleted_customer_id'):
             for row in customer_rows:
-                # Check that the deleted customer ID is not in this row
                 assert context.deleted_customer_id not in row.text, \
                     f"Customer {context.deleted_customer_id} still appears in the list"
         
-        # If we have the test customer data, verify it's not in the list
         if hasattr(context, 'test_customer'):
             customer_name = f"{context.test_customer['first_name']} {context.test_customer['last_name']}"
             for row in customer_rows:
                 assert customer_name.lower() not in row.text.lower(), \
                     f"Customer {customer_name} still appears in the list"
     except Exception:
-        # If no rows found, that's acceptable (list might be empty)
         pass
 
 
 @then("the customer should still appear in the list")
 def step_customer_still_in_list(context):
     """Verify the customer is still in the list after canceling deletion"""
-    # Wait for the list to be visible
     WebDriverWait(context.driver, WAIT_TIME).until(
         EC.visibility_of_element_located((By.ID, "customer-list"))
     )
     
     customer_rows = context.driver.find_elements(By.CLASS_NAME, "customer-row")
     
-    # If we have the customer ID, verify it's still in the list
     if hasattr(context, 'deleted_customer_id'):
         found = False
         for row in customer_rows:
@@ -703,7 +687,6 @@ def step_customer_still_in_list(context):
                 break
         assert found, f"Customer {context.deleted_customer_id} not found in list after canceling deletion"
     
-    # If we have the test customer data, verify it's still in the list
     if hasattr(context, 'test_customer'):
         customer_name = f"{context.test_customer['first_name']} {context.test_customer['last_name']}"
         found = False
@@ -712,3 +695,105 @@ def step_customer_still_in_list(context):
                 found = True
                 break
         assert found, f"Customer {customer_name} not found in list after canceling deletion"
+
+
+# -------------------
+# UPDATE
+# -------------------
+
+@when('I navigate to edit customer "{customer_id}"')
+def step_navigate_to_edit_customer(context, customer_id):
+    """Navigate to the edit page for a specific customer"""
+    if hasattr(context, 'customer_id_mapping') and customer_id in context.customer_id_mapping:
+        actual_id = context.customer_id_mapping[customer_id]
+    else:
+        actual_id = customer_id
+    
+    context.editing_customer_id = actual_id
+    
+    edit_button = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.element_to_be_clickable((By.ID, f"btn-edit-{actual_id}"))
+    )
+    edit_button.click()
+    
+    WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-edit-form"))
+    )
+
+
+@when('I update the customer\'s address to "{new_address}"')
+def step_update_address(context, new_address):
+    """Update the address field"""
+    address_field = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "edit-customer-address"))
+    )
+    address_field.clear()
+    address_field.send_keys(new_address)
+    
+    if not hasattr(context, 'updated_data'):
+        context.updated_data = {}
+    context.updated_data['address'] = new_address
+
+
+@when('I clear the required field "{field_name}"')
+def step_clear_required_field(context, field_name):
+    """Clear a required field"""
+    field_mapping = {
+        "firstName": "edit-customer-first-name",
+        "lastName": "edit-customer-last-name",
+        "address": "edit-customer-address"
+    }
+    
+    field_id = field_mapping.get(field_name, f"edit-customer-{field_name.lower()}")
+    
+    field = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, field_id))
+    )
+    field.clear()
+
+
+@when('I click the "Update" button')
+def step_click_update_button(context):
+    """Click the Update button"""
+    update_button = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.element_to_be_clickable((By.ID, "btn-update-customer"))
+    )
+    update_button.click()
+
+
+@then("the customer's address should be updated in the list")
+def step_verify_address_updated(context):
+    """Verify the customer's address was updated in the list"""
+    WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-list"))
+    )
+    
+    import time
+    time.sleep(1)
+    
+    if hasattr(context, 'editing_customer_id'):
+        customer_rows = context.driver.find_elements(By.CLASS_NAME, "customer-row")
+        
+        found = False
+        for row in customer_rows:
+            if context.editing_customer_id in row.text:
+                if hasattr(context, 'updated_data') and 'address' in context.updated_data:
+                    assert context.updated_data['address'] in row.text, \
+                        f"Updated address not found in customer row"
+                found = True
+                break
+        
+        assert found, f"Customer {context.editing_customer_id} not found in list"
+
+
+@then("I should see an error message about invalid data")
+def step_see_invalid_data_error(context):
+    """Verify an error message about invalid data is displayed"""
+    WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "flash_message"))
+    )
+    message = context.driver.find_element(By.ID, "flash_message")
+    message_text = message.text.lower()
+    
+    assert "error" in message_text or "invalid" in message_text or "required" in message_text, \
+        f"Expected error message about invalid data, got: {message.text}"
