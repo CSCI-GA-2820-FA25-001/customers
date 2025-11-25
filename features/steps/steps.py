@@ -128,6 +128,181 @@ def step_status_suspended(context):
 
 
 # -------------------
+# CREATE
+# -------------------
+
+@when("I fill in the customer form with valid data")
+def step_fill_valid_customer_form(context):
+    """Fill in all required customer fields with valid data"""
+    # Fill in first name
+    first_name_field = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-first-name-input"))
+    )
+    first_name_field.clear()
+    first_name_field.send_keys("John")
+    
+    # Fill in last name
+    last_name_field = context.driver.find_element(By.ID, "customer-last-name-input")
+    last_name_field.clear()
+    last_name_field.send_keys("Doe")
+    
+    # Fill in address
+    address_field = context.driver.find_element(By.ID, "customer-address-input")
+    address_field.clear()
+    address_field.send_keys("123 Main Street, New York, NY 10001")
+    
+    # Store the data for later verification
+    context.created_customer_data = {
+        "first_name": "John",
+        "last_name": "Doe",
+        "address": "123 Main Street, New York, NY 10001"
+    }
+
+
+@when("I fill in the customer form with incomplete data")
+def step_fill_incomplete_customer_form(context):
+    """Fill in only some fields, leaving required fields empty"""
+    # Only fill in first name, leave others empty
+    first_name_field = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-first-name-input"))
+    )
+    first_name_field.clear()
+    first_name_field.send_keys("John")
+    
+    # Explicitly clear other fields to ensure they're empty
+    last_name_field = context.driver.find_element(By.ID, "customer-last-name-input")
+    last_name_field.clear()
+    
+    address_field = context.driver.find_element(By.ID, "customer-address-input")
+    address_field.clear()
+
+
+@when('I click the "Create Customer" button')
+def step_click_create_customer(context):
+    """Click the Create Customer button"""
+    WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.element_to_be_clickable((By.ID, "btn-create-customer"))
+    ).click()
+
+
+@then("I should see a success message")
+def step_see_success_message(context):
+    """Verify a success message is displayed"""
+    WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "flash_message"))
+    )
+    message = context.driver.find_element(By.ID, "flash_message")
+    assert "success" in message.text.lower() or "created" in message.text.lower(), \
+        f"Expected success message, got: {message.text}"
+
+
+@then("the new customer should appear in the customer list")
+def step_new_customer_in_list(context):
+    """Verify the newly created customer appears in the list"""
+    # Wait for customer list to be visible
+    WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-list"))
+    )
+    
+    # Check if our customer data appears in the list
+    if hasattr(context, 'created_customer_data'):
+        customer_rows = context.driver.find_elements(By.CLASS_NAME, "customer-row")
+        
+        # Look for a row containing our customer's data
+        found = False
+        for row in customer_rows:
+            row_text = row.text.lower()
+            if (context.created_customer_data['first_name'].lower() in row_text and
+                context.created_customer_data['last_name'].lower() in row_text):
+                found = True
+                break
+        
+        assert found, f"Customer {context.created_customer_data} not found in list"
+
+
+@then("I should see an error message indicating which fields are required")
+def step_see_required_fields_error(context):
+    """Verify error message about required fields is displayed"""
+    WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "flash_message"))
+    )
+    message = context.driver.find_element(By.ID, "flash_message")
+    message_text = message.text.lower()
+    
+    # Check for error indicators
+    assert "error" in message_text or "required" in message_text or "missing" in message_text, \
+        f"Expected error message about required fields, got: {message.text}"
+
+
+@when("I leave the first name field empty")
+def step_leave_first_name_empty(context):
+    """Ensure first name field is empty"""
+    first_name_field = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-first-name-input"))
+    )
+    first_name_field.clear()
+
+
+@when('I fill in first name with "{first_name}"')
+def step_fill_first_name(context, first_name):
+    """Fill in the first name field"""
+    first_name_field = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-first-name-input"))
+    )
+    first_name_field.clear()
+    first_name_field.send_keys(first_name)
+
+
+@when("I leave the last name field empty")
+def step_leave_last_name_empty(context):
+    """Ensure last name field is empty"""
+    last_name_field = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-last-name-input"))
+    )
+    last_name_field.clear()
+
+
+@when('I fill in last name with "{last_name}"')
+def step_fill_last_name(context, last_name):
+    """Fill in the last name field"""
+    last_name_field = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-last-name-input"))
+    )
+    last_name_field.clear()
+    last_name_field.send_keys(last_name)
+
+
+@when("I leave the address field empty")
+def step_leave_address_empty(context):
+    """Ensure address field is empty"""
+    address_field = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-address-input"))
+    )
+    address_field.clear()
+
+
+@when('I fill in address with "{address}"')
+def step_fill_address(context, address):
+    """Fill in the address field"""
+    address_field = WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "customer-address-input"))
+    )
+    address_field.clear()
+    address_field.send_keys(address)
+
+
+@then('I should see an error message "{error_message}"')
+def step_see_specific_error_message(context, error_message):
+    """Verify a specific error message is displayed"""
+    WebDriverWait(context.driver, WAIT_TIME).until(
+        EC.visibility_of_element_located((By.ID, "flash_message"))
+    )
+    message = context.driver.find_element(By.ID, "flash_message")
+    assert error_message.lower() in message.text.lower(), \
+        f"Expected '{error_message}' in message, got: {message.text}"
+
+
+# -------------------
 # LISTING
 # -------------------
 
@@ -286,7 +461,10 @@ def step_customer_exists(context, customer_id):
         )
     except Exception:
         pass  # Ignore if doesn't exist
-
+    
+    # Create customer via API using direct database access via a custom endpoint
+    # OR we can use the API but then retrieve the created ID
+    # For simplicity in BDD tests, let's use the simpler approach:
     # Create via API and store whatever ID we get
     
     customer_data = {
@@ -419,4 +597,3 @@ def step_see_customer_not_found(context):
             "Customer not found"
         )
     )
-

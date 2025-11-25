@@ -43,6 +43,47 @@ Feature: Customer User Interface
         Then I should see "Error: Customer not found"
 
     # ------------------------
+    # CREATE
+    # ------------------------
+
+    Scenario: Create a new customer
+        Given I am on the home page
+        When I fill in the customer form with valid data
+        And I click the "Create Customer" button
+        Then I should see a success message
+        And the new customer should appear in the customer list
+
+    Scenario: Create a customer with missing required fields
+        Given I am on the home page
+        When I fill in the customer form with incomplete data
+        And I click the "Create Customer" button
+        Then I should see an error message indicating which fields are required
+
+    Scenario: Create a customer with empty first name
+        Given I am on the home page
+        When I leave the first name field empty
+        And I fill in last name with "Smith"
+        And I fill in address with "123 Main St"
+        And I click the "Create Customer" button
+        Then I should see an error message "first_name is required"
+
+    Scenario: Create a customer with empty last name
+        Given I am on the home page
+        When I fill in first name with "John"
+        And I leave the last name field empty
+        And I fill in address with "123 Main St"
+        And I click the "Create Customer" button
+        Then I should see an error message "last_name is required"
+
+    Scenario: Create a customer with empty address
+        Given I am on the home page
+        When I fill in first name with "John"
+        And I fill in last name with "Smith"
+        And I leave the address field empty
+        And I click the "Create Customer" button
+        Then I should see an error message "address is required"
+
+    # ------------------------
     # LISTING
     # ------------------------
 
