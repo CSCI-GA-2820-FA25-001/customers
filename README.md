@@ -65,7 +65,7 @@ Response: `200 OK`
   "name": "Customers Service",
   "version": "v1.0.0",
   "description": "Service managing customer accounts for the eCommerce site",
-  "list_url": "/customers"
+  "list_url": "/api/customers"
 }
 ```
 
@@ -76,7 +76,7 @@ Response: `200 OK`
    Request:
    
     ```http
-    POST /customers
+    POST /api/customers
     Content-Type: application/json
     
     {
@@ -107,7 +107,7 @@ Response: `200 OK`
    
    Request:
    
-   `GET /customers`
+   `GET /api/customers`
    
    `Response: 200 OK`
 
@@ -135,7 +135,7 @@ Response: `200 OK`
    
    Get a specific customer by ID.
    
-   Request: `GET /customers/{id}`
+   Request: `GET /api/customers/{id}`
    
    Response: `200 OK`
 
@@ -154,7 +154,7 @@ Response: `200 OK`
    
    Update an existing customer record.
    
-   Request: `PUT /customers/{id}`
+   Request: `PUT /api/customers/{id}`
    
    Content-Type: `application/json`
    
@@ -185,7 +185,7 @@ Response: `200 OK`
    
    Delete a customer record.
    
-   Request: `DELETE /customers/{id}`
+   Request: `DELETE /api/customers/{id}`
    
    Response: `204 No Content`
    
@@ -206,7 +206,7 @@ curl -H "Host: customers.local" http://localhost:8080/health
 
 # Or add to /etc/hosts for browser access:
 echo "127.0.0.1 customers.local" | sudo tee -a /etc/hosts
-# Then visit: http://customers.local:8080
+# Then visit: http://api/customers.local:8080
 ```
 
 ### Development

@@ -43,7 +43,7 @@ def index():
                 "name": "Customers Service",
                 "version": "v1.0.0",
                 "description": "Service managing customer accounts for the eCommerce site",
-                "list_url": "/customers",
+                "list_url": "/api/customers",
             }
         ),
         status.HTTP_200_OK,
@@ -55,13 +55,13 @@ def index():
 ######################################################################
 
 
-@app.route("/health", methods=["GET"])
+@app.route("/api/health", methods=["GET"])
 def health():
     """Health check endpoint for Kubernetes"""
     return jsonify({"status": "OK"}), status.HTTP_200_OK
 
 
-@app.route("/customers", methods=["POST"])
+@app.route("/api/customers", methods=["POST"])
 def create_customer():
     """Creates a new Customer record"""
     data = request.get_json()
@@ -80,7 +80,7 @@ def create_customer():
         raise InternalServerError(str(e)) from e
 
 
-@app.route("/customers/<customer_id>", methods=["GET"])
+@app.route("/api/customers/<customer_id>", methods=["GET"])
 def get_customer(customer_id):
     """Read a single customer by id"""
     if not customer_id.isdigit():
@@ -99,13 +99,13 @@ def get_customer(customer_id):
     return jsonify(customer.serialize()), status.HTTP_200_OK
 
 
-@app.route("/customers", methods=["GET"])
+@app.route("/api/customers", methods=["GET"])
 def list_customers():
     """Returns a list of all customers
     Example queries:
-      GET /customers
-      GET /customers?last_name=Smith
-      GET /customers?first_name=Alice&address=NY
+      GET /api/customers
+      GET /api/customers?last_name=Smith
+      GET /api/customers?first_name=Alice&address=NY
     """
     # pylint: disable=broad-exception-caught
     try:
@@ -169,7 +169,7 @@ def list_customers():
         raise InternalServerError(str(e)) from e
 
 
-@app.route("/customers/<customer_id>", methods=["DELETE"])
+@app.route("/api/customers/<customer_id>", methods=["DELETE"])
 def delete_customer(customer_id):
     """Delete a customer by id"""
     if not customer_id.isdigit():
@@ -195,7 +195,7 @@ def delete_customer(customer_id):
 ######################################################################
 # UPDATE A CUSTOMER
 ######################################################################
-@app.route("/customers/<customer_id>", methods=["PUT"])
+@app.route("/api/customers/<customer_id>", methods=["PUT"])
 def update_customer(customer_id):  # noqa: C901
     """Update an existing Customer record by id.
 
@@ -266,7 +266,7 @@ def update_customer(customer_id):  # noqa: C901
         raise InternalServerError(str(e)) from e
 
 
-@app.route("/customers/<customer_id>/status", methods=["PUT"])
+@app.route("/api/customers/<customer_id>/status", methods=["PUT"])
 def update_status(customer_id):  # noqa: C901
     """Set customer's status to one of: active | deactivated | suspended"""
     # pylint: disable=too-many-branches
