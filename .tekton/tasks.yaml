@@ -1,0 +1,152 @@
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: echo
+spec:
+  workspaces:
+    - name: shared-workspace
+  steps:
+    - name: echo
+      image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      script: |
+        echo "Pipeline is running"
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: checkout
+spec:
+  params:
+    - name: url
+    - name: revision
+      default: main
+  workspaces:
+    - name: shared-workspace
+  steps:
+    - name: clone
+      image: alpine/git
+      script: |
+        cd $(workspaces.shared-workspace.path)
+        rm -rf repo || true
+        git clone $(params.url) repo
+        cd repo
+        git checkout $(params.revision)
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: lint
+spec:
+  workspaces:
+    - name: shared-workspace
+  steps:
+    - name: install-tools
+      image: python:3.10
+      script: |
+        cd $(workspaces.shared-workspace.path)/repo
+        pip install flake8 pylint pipenv
+        pipenv install --dev --system
+    - name: run-lint
+      image: python:3.10
+      script: |
+        cd $(workspaces.shared-workspace.path)/repo
+        flake8 service tests || exit 1
+        pylint service tests || exit 1
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: tests
+spec:
+  workspaces:
+    - name: shared-workspace
+  steps:
+    - name: run-tests
+      image: python:3.10
+      script: |
+        cd $(workspaces.shared-workspace.path)/repo
+        pip install pipenv
+        pipenv install --dev --system
+        pytest --pspec
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: build-image
+spec:
+  params:
+    - name: IMAGE
+    - name: DOCKERFILE
+      default: repo/Dockerfile
+    - name: CONTEXT
+      default: repo
+  workspaces:
+    - name: shared-workspace
+  steps:
+    - name: build
+      image: quay.io/containers/buildah:latest
+      securityContext:
+        privileged: true
+      script: |
+        cd $(workspaces.shared-workspace.path)
+        buildah bud \
+          -f $(params.DOCKERFILE) \
+          -t $(params.IMAGE) \
+          $(params.CONTEXT)
+    - name: push
+      image: quay.io/containers/buildah:latest
+      securityContext:
+        privileged: true
+      script: |
+        buildah push $(params.IMAGE)
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: deploy
+spec:
+  params:
+    - name: IMAGE
+    - name: DEPLOYMENT
+  workspaces:
+    - name: shared-workspace
+  steps:
+    - name: apply
+      image: bitnami/kubectl:latest
+      script: |
+        cd $(workspaces.shared-workspace.path)/repo/k8s
+        kubectl apply -f .
+
+    - name: patch-image
+      image: bitnami/kubectl:latest
+      script: |
+        kubectl set image deployment/$(params.DEPLOYMENT) \
+          $(params.DEPLOYMENT)=$(params.IMAGE)
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: behave-tests
+spec:
+  workspaces:
+    - name: shared-workspace
+  steps:
+    - name: install-deps
+      image: python:3.10
+      script: |
+        cd $(workspaces.shared-workspace.path)/repo
+        pip install pipenv
+        pipenv install --dev --system
+
+    - name: run-behave
+      image: python:3.10
+      script: |
+        cd $(workspaces.shared-workspace.path)/repo/tests/bdd
+        behave

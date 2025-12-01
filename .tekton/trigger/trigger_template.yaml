@@ -1,0 +1,41 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: github-push-template
+spec:
+  params:
+    - name: git-repo-url
+      description: Git repository URL
+    - name: git-revision
+      description: Git revision (branch/ref)
+    - name: git-repo-name
+      description: Repository name used for image + app names
+
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1beta1
+      kind: PipelineRun
+      metadata:
+        generateName: cd-pipeline-$(tt.params.git-repo-name)-
+      spec:
+        serviceAccountName: pipeline
+        
+        pipelineRef:
+          name: cd-pipeline
+
+        params:
+          - name: git-url
+            value: $(tt.params.git-repo-url)
+
+          - name: git-ref
+            value: $(tt.params.git-revision)
+
+          - name: image-name
+            value: image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(tt.params.git-repo-name):$(tt.params.git-revision)
+
+          - name: app-name
+            value: $(tt.params.git-repo-name)
+
+        workspaces:
+          - name: pipeline-workspace
+            persistentVolumeClaim:
+              claimName: pipeline-pvc
