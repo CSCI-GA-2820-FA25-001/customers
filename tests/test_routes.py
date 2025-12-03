@@ -637,3 +637,37 @@ class TestSadPaths(TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertEqual(data["status"], "OK")
+
+
+######################################################################
+#  T E S T   R E S T X   W R A P P E R S   A N D   E R R O R S
+######################################################################
+
+
+def test_restx_get_customers(client=app.test_client()):
+    """Covers CustomerListAPI.get() RESTX endpoint"""
+    resp = client.get("/api/customers/")
+    assert resp.status_code == 200
+
+
+def test_restx_create_customer(client=app.test_client()):
+    """Covers CustomerListAPI.post() RESTX endpoint"""
+    payload = {"first_name": "RestX", "last_name": "Test", "address": "SlashCity"}
+    resp = client.post("/api/customers/", json=payload)
+    assert resp.status_code == 201
+    data = resp.get_json()
+    assert data["first_name"] == "RestX"
+
+
+def test_restx_unexpected_exception(monkeypatch, client=app.test_client()):
+    """Covers app.logger.exception(...) in RESTX error handler"""
+    from service import routes
+
+    def boom():
+        raise Exception("Simulated crash")
+
+    monkeypatch.setattr(routes, "list_customers", boom)
+    resp = client.get("/api/customers/")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert data["error"] == "Internal Server Error"
