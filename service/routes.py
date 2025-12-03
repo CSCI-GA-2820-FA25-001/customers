@@ -23,9 +23,8 @@ is intentionally conservative so the test-suite (which expects specific
 JSON error shapes) will pass while keeping full Swagger docs via Flask-RESTX.
 """
 import inspect
-from flask import jsonify, request, current_app as app
+from flask import jsonify, request, current_app as app, render_template
 from flask_restx import Api, Resource, fields, reqparse
-from flask import render_template
 from werkzeug.exceptions import (
     NotFound,
     BadRequest,
@@ -210,47 +209,74 @@ class HealthResource(Resource):
 def _parse_and_validate_query_args(raw_args):  # pylint: disable=too-many-branches
     """Parse and validate query parameters"""
     allowed = {"first_name", "last_name", "address", "id", "limit", "page"}
-    # Detect unexpected params
-    for k in raw_args.keys():
-        if k not in allowed:
-            _raise_http(400, f"Invalid query parameter: {k}")
-
     filters = {}
     limit = None
     page = None
-
-    # limit
-    if "limit" in raw_args:
-        v = raw_args.get("limit")
-        try:
-            limit = int(v)
-        except ValueError:
-            _raise_http(400, "limit must be an integer")
-        if limit <= 0:
-            _raise_http(400, "limit must be a positive integer")
-
-    # page
-    if "page" in raw_args:
-        v = raw_args.get("page")
-        try:
-            page = int(v)
-        except ValueError:
-            _raise_http(400, "page must be an integer")
-        if page <= 0:
-            page = 1
-
-    # id
+    # Validate parameters
+    for k in raw_args.keys():
+        if k not in allowed:
+            _raise_http(400, f"Invalid query parameter: {k}")
+    # Parse limit
+    limit = _parse_limit_param(raw_args)
+    # Parse page
+    page = _parse_page_param(raw_args)
+    # Parse id
     if "id" in raw_args:
-        v = raw_args.get("id")
-        if not str(v).isdigit():
-            _raise_http(400, "id must be an integer")
-        filters["id"] = int(v)
+        filters["id"] = _parse_id_param(raw_args["id"])
 
+    # Parse string filters
+    filters.update(_parse_string_filters(raw_args))
+
+    return filters, limit, page
+
+
+def _parse_limit_param(raw_args):
+    """Parse and validate limit parameter"""
+    if "limit" not in raw_args:
+        return None
+
+    v = raw_args.get("limit")
+    try:
+        limit = int(v)
+    except ValueError:
+        _raise_http(400, "limit must be an integer")
+    if limit <= 0:
+        _raise_http(400, "limit must be a positive integer")
+
+    return limit
+
+
+def _parse_page_param(raw_args):
+    """Parse and validate page parameter"""
+    if "page" not in raw_args:
+        return None
+
+    v = raw_args.get("page")
+    try:
+        page = int(v)
+    except ValueError:
+        _raise_http(400, "page must be an integer")
+
+    if page <= 0:
+        page = 1
+
+    return page
+
+
+def _parse_id_param(id_value):
+    """Parse and validate id parameter"""
+    if not str(id_value).isdigit():
+        _raise_http(400, "id must be an integer")
+    return int(id_value)
+
+
+def _parse_string_filters(raw_args):
+    """Parse string filter parameters"""
+    filters = {}
     for k in ("first_name", "last_name", "address"):
         if k in raw_args:
             filters[k] = raw_args.get(k)
-
-    return filters, limit, page
+    return filters
 
 
 ######################################################################
@@ -277,15 +303,27 @@ class CustomerCollection(Resource):
 
         # If no filters and no pagination requested -> return all (but handle DB errors)
         if not filters and limit is None:
-            try:
-                customers = Customer.all()
-            except Exception:  # pylint: disable=broad-except
-                app.logger.exception("Unexpected error while listing customers")
-                _raise_http(500, "Internal Server Error")
-            results = [c.serialize() for c in customers]
-            return results, status.HTTP_200_OK
+            return self._return_all_customers()
 
         # Otherwise build query if available, else fallback to Python filtering
+        customers = self._get_filtered_customers(filters, limit, page)
+
+        results = [c.serialize() for c in customers]
+        app.logger.info("Returning %d customers", len(results))
+        return results, status.HTTP_200_OK
+
+    def _return_all_customers(self):
+        """Return all customers without filtering"""
+        try:
+            customers = Customer.all()
+        except Exception:  # pylint: disable=broad-except
+            app.logger.exception("Unexpected error while listing customers")
+            _raise_http(500, "Internal Server Error")
+        results = [c.serialize() for c in customers]
+        return results, status.HTTP_200_OK
+
+    def _get_filtered_customers(self, filters, limit, page):   # pylint: disable=inconsistent-return-statements
+        """Get customers with filters and optional pagination"""
         try:
             query_obj = Customer.query
         except Exception:  # pylint: disable=broad-except
@@ -293,56 +331,69 @@ class CustomerCollection(Resource):
 
         try:
             if query_obj is not None and hasattr(query_obj, "filter"):
-                query = query_obj
-                for attr, val in filters.items():
-                    column = getattr(Customer, attr)
-                    if attr == "id":
-                        query = query.filter(column == val)
-                    else:
-                        query = query.filter(column.ilike(f"%{val}%"))
-
-                if limit is not None:
-                    if page is None or page <= 0:
-                        page = 1
-                    offset = (page - 1) * limit
-                    customers = query.offset(offset).limit(limit).all()
-                else:
-                    customers = query.all()
-            else:
-                # Fallback to Python filtering (helps tests that replace Customer.query)
-                all_customers = Customer.all()  # may raise -> caught below
-                customers = all_customers
-                for attr, val in filters.items():
-                    if attr == "id":
-                        customers = [c for c in customers if c.id == val]
-                    else:
-                        customers = [
-                            c
-                            for c in customers
-                            if (getattr(c, attr) or "").lower().find(str(val).lower()) != -1
-                        ]
-
-                if limit is not None:
-                    if page is None or page <= 0:
-                        page = 1
-                    offset = (page - 1) * limit
-                    customers = customers[offset:offset + limit]
-
+                return self._filter_with_sql(filters, limit, page, query_obj)
+            return self._filter_with_python(filters, limit, page)
         except BadRequest:
             raise
         except Exception:  # pylint: disable=broad-except
             app.logger.exception("Unexpected error while listing customers")
             _raise_http(500, "Internal Server Error")
 
-        results = [c.serialize() for c in customers]
-        app.logger.info("Returning %d customers", len(results))
-        return results, status.HTTP_200_OK
+    def _filter_with_sql(self, filters, limit, page, query_obj):   # pylint: disable=inconsistent-return-statements
+        """Filter customers using SQL queries"""
+        try:
+            query = query_obj
+            for attr, val in filters.items():
+                column = getattr(Customer, attr)
+                if attr == "id":
+                    query = query.filter(column == val)
+                else:
+                    query = query.filter(column.ilike(f"%{val}%"))
+
+            if limit is not None:
+                if page is None or page <= 0:
+                    page = 1
+                offset = (page - 1) * limit
+                return query.offset(offset).limit(limit).all()
+            return query.all()
+        except BadRequest:
+            raise
+        except Exception:  # pylint: disable=broad-except
+            app.logger.exception("Unexpected error while filtering customers with SQL")
+            _raise_http(500, "Internal Server Error")
+
+    def _filter_with_python(self, filters, limit, page):
+        """Filter customers using Python (fallback when SQL not available)"""
+        try:
+            all_customers = Customer.all()
+        except Exception:  # pylint: disable=broad-except
+            app.logger.exception("Unexpected error while listing customers")
+            _raise_http(500, "Internal Server Error")
+
+        customers = all_customers
+        for attr, val in filters.items():
+            if attr == "id":
+                customers = [c for c in customers if c.id == val]
+            else:
+                customers = [
+                    c
+                    for c in customers
+                    if (getattr(c, attr) or "").lower().find(str(val).lower()) != -1
+                ]
+
+        if limit is not None:
+            if page is None or page <= 0:
+                page = 1
+            offset = (page - 1) * limit
+            customers = customers[offset:offset + limit]
+
+        return customers
 
     @api.doc("create_customer")
     @api.expect(create_model)
     @api.marshal_with(customer_model, code=201)
     @api.response(400, "Invalid input data")
-    def post(self):  # pylint: disable=too-many-branches
+    def post(self):
         """
         Create a new Customer
         """
@@ -357,29 +408,21 @@ class CustomerCollection(Resource):
             _raise_http(400, "No input data provided")
 
         customer = Customer()
+        self._deserialize_customer(customer, data)
+        self._create_customer_in_db(customer)
 
-        # The following block handles test-mocking cases where tests replace
-        # Customer.deserialize with a function that only accepts data (no self).
-        # Those branches are defensive; we mark them as not required for coverage
-        # to keep CI focused on behavior verified by tests.
+        app.logger.info("Customer with ID [%s] created", customer.id)
+        location_url = api.url_for(CustomerResource, customer_id=customer.id, _external=False)
+        return customer.serialize(), status.HTTP_201_CREATED, {"Location": location_url}
+
+    def _deserialize_customer(self, customer, data):
+        """Deserialize customer data with defensive handling for test mocks"""
         try:
             cls_deserialize = getattr(Customer, "deserialize", None)
             if cls_deserialize and inspect.isfunction(cls_deserialize):
-                # pragma: no cover - defensive branch for test mocks / alternate call shapes
-                try:  # pragma: no cover
-                    sig = inspect.signature(cls_deserialize)
-                    if len(sig.parameters) == 1:  # pragma: no cover
-                        cls_deserialize(data)  # pragma: no cover
-                        try:  # pragma: no cover
-                            customer.deserialize(data)
-                        except Exception:  # pragma: no cover
-                            pass
-                    else:  # pragma: no cover
-                        customer.deserialize(data)  # pragma: no cover
-                except ValueError:  # pragma: no cover
-                    customer.deserialize(data)  # pragma: no cover
+                self._handle_deserialize_mock(cls_deserialize, customer, data)
             else:
-                customer.deserialize(data)
+                customer.deserialize(data)  # pylint: disable=no-value-for-parameter
         except DataValidationError as err:
             app.logger.error("Data validation error: %s", err)
             _raise_http(400, str(err))
@@ -387,6 +430,24 @@ class CustomerCollection(Resource):
             app.logger.exception("Unexpected error creating customer")
             _raise_http(500, "Internal Server Error")
 
+    def _handle_deserialize_mock(self, cls_deserialize, customer, data):
+        """Handle test mocks of Customer.deserialize"""
+        # pragma: no cover - defensive branch for test mocks
+        try:  # pragma: no cover
+            sig = inspect.signature(cls_deserialize)
+            if len(sig.parameters) == 1:  # pragma: no cover
+                cls_deserialize(data)  # pragma: no cover
+                try:  # pragma: no cover
+                    customer.deserialize(data)  # pylint: disable=no-value-for-parameter
+                except Exception:    # pylint: disable=broad-except
+                    pass
+            else:  # pragma: no cover
+                customer.deserialize(data)  # pylint: disable=no-value-for-parameter
+        except ValueError:  # pragma: no cover
+            customer.deserialize(data)  # pylint: disable=no-value-for-parameter
+
+    def _create_customer_in_db(self, customer):
+        """Create customer in database"""
         try:
             customer.create()
         except DataValidationError as err:
@@ -396,14 +457,11 @@ class CustomerCollection(Resource):
             app.logger.exception("Unexpected error creating customer")
             _raise_http(500, "Internal Server Error")
 
-        app.logger.info("Customer with ID [%s] created", customer.id)
-        location_url = api.url_for(CustomerResource, customer_id=customer.id, _external=False)
-        return customer.serialize(), status.HTTP_201_CREATED, {"Location": location_url}
-
-
 ######################################################################
 # Customer Resource: GET, PUT, DELETE
 ######################################################################
+
+
 @api.route("/customers/<string:customer_id>")
 @api.param("customer_id", "The Customer identifier")
 class CustomerResource(Resource):
@@ -441,11 +499,52 @@ class CustomerResource(Resource):
     @api.marshal_with(customer_model)
     @api.response(404, "Customer not found")
     @api.response(400, "Invalid input data")
-    def put(self, customer_id):  # pylint: disable=too-many-branches,too-many-statements
+    def put(self, customer_id):
         """Update a customer"""
         customer_id = self._validate_customer_id(customer_id)
         app.logger.info("Request to update customer with id [%s]", customer_id)
 
+        customer = self._find_customer(customer_id)
+        self._validate_request_content_type()
+
+        data = self._get_request_json()
+        self._validate_no_id_update(data)
+
+        allowed_fields = {"first_name", "last_name", "address"}
+        incoming_data = self._extract_allowed_fields(data, allowed_fields)
+
+        if not incoming_data:
+            return customer.serialize(), status.HTTP_200_OK
+
+        cleaned_data = self._clean_and_validate_fields(incoming_data)
+        self._apply_updates_to_customer(customer, cleaned_data, customer_id)
+
+        app.logger.info("Customer with ID [%s] updated", customer_id)
+        return customer.serialize(), status.HTTP_200_OK
+
+    def _validate_request_content_type(self):
+        """Validate request has JSON content type"""
+        if not request.is_json:
+            _raise_http(400, "No input data provided")
+
+    def _get_request_json(self):
+        """Get and validate JSON data from request"""
+        data = request.get_json(silent=True)
+        if data is None:
+            _raise_http(400, "No input data provided")
+        return data
+
+    def _validate_no_id_update(self, data):
+        """Validate that id field is not being updated"""
+        if "id" in data:
+            _raise_http(400, "id cannot be updated")
+
+    def _extract_allowed_fields(self, data, allowed_fields):
+        """Extract only allowed fields from data"""
+        return {k: v for k, v in data.items() if k in allowed_fields}
+
+    def _find_customer(self, customer_id):
+        """Find customer by ID"""
         try:
             customer = Customer.find(customer_id)
         except Exception:  # pylint: disable=broad-except
@@ -455,57 +554,38 @@ class CustomerResource(Resource):
         if not customer:
             _raise_http(404, "customer not found")
 
-        if not request.is_json:
-            _raise_http(400, "No input data provided")
+        return customer
 
-        data = request.get_json(silent=True)
-        if data is None:
-            _raise_http(400, "No input data provided")
+    def _clean_and_validate_fields(self, incoming_data):
+        """Clean and validate field values"""
+        invalid_fields = []
+        cleaned_data = {}
 
-        if "id" in data:
-            _raise_http(400, "id cannot be updated")
-
-        allowed = {"first_name", "last_name", "address"}
-        incoming = {k: v for k, v in data.items() if k in allowed}
-
-        if not incoming:
-            return customer.serialize(), status.HTTP_200_OK
-
-        invalid = []
-        cleaned = {}
-        for k, v in incoming.items():
-            if not isinstance(v, str) or not v.strip():
-                invalid.append(k)
+        for field, value in incoming_data.items():
+            if not self._is_valid_field_value(value):
+                invalid_fields.append(field)
             else:
-                cleaned[k] = v.strip()
+                cleaned_data[field] = value.strip()
 
-        if invalid:
-            _raise_http(400, f"invalid or empty fields: {', '.join(sorted(invalid))}")
+        if invalid_fields:
+            self._raise_invalid_fields_error(invalid_fields)
 
+        return cleaned_data
+
+    def _is_valid_field_value(self, value):
+        """Check if field value is valid"""
+        return isinstance(value, str) and value.strip()
+
+    def _raise_invalid_fields_error(self, invalid_fields):
+        """Raise error for invalid fields"""
+        _raise_http(400, f"invalid or empty fields: {', '.join(sorted(invalid_fields))}")
+
+    def _apply_updates_to_customer(self, customer, cleaned_data, customer_id):
+        """Apply updates to customer object"""
         try:
-            current = customer.serialize()
-            current.update(cleaned)
-
-            # defensive branch for test mocks of Customer.deserialize
-            cls_deserialize = getattr(Customer, "deserialize", None)
-            if cls_deserialize and inspect.isfunction(cls_deserialize):
-                # pragma: no cover - defensive/test-mock supporting branch
-                try:  # pragma: no cover
-                    sig = inspect.signature(cls_deserialize)  # pragma: no cover
-                    if len(sig.parameters) == 1:  # pragma: no cover
-                        cls_deserialize(current)  # pragma: no cover
-                        try:  # pragma: no cover
-                            customer.deserialize(current)
-                        except Exception:  # pragma: no cover
-                            pass
-                    else:  # pragma: no cover
-                        customer.deserialize(current)  # pragma: no cover
-                except ValueError:  # pragma: no cover
-                    customer.deserialize(current)  # pragma: no cover
-            else:
-                customer.deserialize(current)
-
-            customer.update()
+            current_data = customer.serialize()
+            current_data.update(cleaned_data)
+            self._deserialize_and_update(customer, current_data)
         except DataValidationError as err:
             app.logger.error("Data validation error during update: %s", err)
             _raise_http(400, str(err))
@@ -513,8 +593,32 @@ class CustomerResource(Resource):
             app.logger.exception("Unexpected error updating customer %s", customer_id)
             _raise_http(500, "Internal Server Error")
 
-        app.logger.info("Customer with ID [%s] updated", customer_id)
-        return customer.serialize(), status.HTTP_200_OK
+    def _deserialize_and_update(self, customer, data):
+        """Deserialize data and update customer"""
+        # defensive branch for test mocks of Customer.deserialize
+        cls_deserialize = getattr(Customer, "deserialize", None)
+        if cls_deserialize and inspect.isfunction(cls_deserialize):
+            self._handle_mock_deserialize(cls_deserialize, customer, data)
+        else:
+            customer.deserialize(data)  # pylint: disable=no-value-for-parameter
+
+        customer.update()
+
+    def _handle_mock_deserialize(self, cls_deserialize, customer, data):
+        """Handle test mocks of Customer.deserialize"""
+        # pragma: no cover - defensive/test-mock supporting branch
+        try:  # pragma: no cover
+            sig = inspect.signature(cls_deserialize)  # pragma: no cover
+            if len(sig.parameters) == 1:  # pragma: no cover
+                cls_deserialize(data)  # pragma: no cover
+                try:  # pragma: no cover
+                    customer.deserialize(data)  # pylint: disable=no-value-for-parameter
+                except Exception:   # pylint: disable=broad-except
+                    pass
+            else:  # pragma: no cover
+                customer.deserialize(data)  # pylint: disable=no-value-for-parameter
+        except ValueError:  # pragma: no cover
+            customer.deserialize(data)  # pylint: disable=no-value-for-parameter
 
     @api.doc("delete_customer")
     @api.response(204, "Customer deleted")
@@ -561,11 +665,48 @@ class CustomerStatusResource(Resource):
     @api.marshal_with(customer_model)
     @api.response(404, "Customer not found")
     @api.response(400, "Invalid status value")
-    def put(self, customer_id):  # pylint: disable=too-many-branches
+    def put(self, customer_id):
         """Update customer status"""
         customer_id = self._validate_customer_id(customer_id)
         app.logger.info("Request to update status for customer [%s]", customer_id)
 
+        customer = self._find_customer_for_status(customer_id)
+        self._validate_json_content_type()
+
+        data = self._get_status_request_json()
+        new_status = self._extract_and_validate_status(data)
+
+        self._update_status_if_changed(customer, new_status, customer_id)
+
+        app.logger.info("Status set for customer %s -> '%s'", customer_id, customer.status)
+        return customer.serialize(), status.HTTP_200_OK
+
+    def _validate_json_content_type(self):
+        """Validate request has JSON content type"""
+        if not request.is_json:
+            _raise_http(415, "Content-Type must be application/json")
+
+    def _get_status_request_json(self):
+        """Get JSON data for status update"""
+        data = request.get_json(silent=True)
+        if not data or "status" not in data:
+            _raise_http(400, "Request must include a 'status' field")
+        return data
+
+    def _extract_and_validate_status(self, data):
+        """Extract and validate status value from data"""
+        new_status = (data["status"] or "").strip().lower()
+        self._validate_status_value(new_status)
+        return new_status
+
+    def _validate_status_value(self, status_value):
+        """Validate status value is allowed"""
+        if status_value not in ALLOWED_STATUSES:
+            valid = ", ".join(sorted(ALLOWED_STATUSES))
+            _raise_http(400, f"unsupported status '{status_value}'. valid statuses: {valid}")
+
+    def _find_customer_for_status(self, customer_id):
+        """Find customer for status update"""
         try:
             customer = Customer.find(customer_id)
         except Exception:  # pylint: disable=broad-except
@@ -575,18 +716,10 @@ class CustomerStatusResource(Resource):
         if not customer:
             _raise_http(404, "customer not found")
 
-        if not request.is_json:
-            _raise_http(415, "Content-Type must be application/json")
+        return customer
 
-        data = request.get_json(silent=True)
-        if not data or "status" not in data:
-            _raise_http(400, "Request must include a 'status' field")
-
-        new_status = (data["status"] or "").strip().lower()
-        if new_status not in ALLOWED_STATUSES:
-            valid = ", ".join(sorted(ALLOWED_STATUSES))
-            _raise_http(400, f"unsupported status '{new_status}'. valid statuses: {valid}")
-
+    def _update_status_if_changed(self, customer, new_status, customer_id):
+        """Update customer status if it has changed"""
         try:
             if customer.status != new_status:
                 customer.set_status(new_status)
@@ -597,6 +730,3 @@ class CustomerStatusResource(Resource):
         except Exception:  # pylint: disable=broad-except
             app.logger.exception("Unexpected error setting status for %s", customer_id)
             _raise_http(500, "Internal Server Error")
-
-        app.logger.info("Status set for customer %s -> '%s'", customer_id, customer.status)
-        return customer.serialize(), status.HTTP_200_OK

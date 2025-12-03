@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ######################################################################
-
+# pylint: disable=duplicate-code
+# pylint: disable=too-many-lines
 """
 TestCustomer API Service Test Suite
 """
@@ -27,9 +28,17 @@ from werkzeug.exceptions import BadRequest, NotFound, InternalServerError, Metho
 from wsgi import app
 from service.common import status
 from service.models import db, Customer, DataValidationError
+from service.routes import (
+    _handle_data_validation,
+    _handle_bad_request,
+    _handle_not_found,
+    _handle_internal_server,
+    _handle_method_not_allowed,
+    _handle_unsupported_media_type,
+    _raise_http,
+    _parse_and_validate_query_args
+)
 from tests.factories import CustomerFactory
-from service.routes import _raise_http, _parse_and_validate_query_args
-
 DATABASE_URI = os.getenv(
     "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
 )
@@ -516,16 +525,6 @@ class TestYourResourceService(TestCase):
 
     def test_error_handlers_directly(self):
         """Test error handlers directly"""
-        # Import the handlers
-        from service.routes import (
-            _handle_data_validation,
-            _handle_bad_request,
-            _handle_not_found,
-            _handle_internal_server,
-            _handle_method_not_allowed,
-            _handle_unsupported_media_type,
-        )
-
         # Test DataValidationError handler
         error = DataValidationError("Test validation")
         response = _handle_data_validation(error)
@@ -1226,15 +1225,19 @@ class TestYourResourceService(TestCase):
         original_filter = Customer.query.filter
 
         # Create a mock that raises exception
-        def mock_filter(*args, **kwargs):
+        def mock_filter():
             class MockQuery:
+                "class Mockquery "
                 def all(self):
+                    "class Mockquery "
                     raise RuntimeError("Database filter error")
 
-                def offset(self, *args):
+                def offset(self):
+                    "class Mockquery "
                     return self
 
-                def limit(self, *args):
+                def limit(self):
+                    "class Mockquery "
                     return self
 
             return MockQuery()
@@ -1336,12 +1339,15 @@ class TestYourResourceService(TestCase):
             _parse_and_validate_query_args({"limit": "-1"})
 
         # Test 3: page as zero (should become 1)
-        filters, limit, page = _parse_and_validate_query_args({"page": "0"})
-        self.assertEqual(page, 1)
+        filters, limit_val, page_val = _parse_and_validate_query_args({"page": "0"})  # Use different variable names
+        self.assertEqual(page_val, 1)  # Use page_val
+        self.assertIsNone(limit_val)  # Check that limit is None
 
         # Test 4: valid id
-        filters, limit, page = _parse_and_validate_query_args({"id": "123"})
+        filters, limit_val, page_val = _parse_and_validate_query_args({"id": "123"})  # Use different variable names
         self.assertEqual(filters["id"], 123)
+        self.assertIsNone(limit_val)  # Check that limit is None
+        self.assertIsNone(page_val)   # Check that page is None
 
         # Test 5: invalid id
         with self.assertRaises(BadRequest):
