@@ -22,10 +22,9 @@ and Delete Customer records with Swagger documentation.  The implementation
 is intentionally conservative so the test-suite (which expects specific
 JSON error shapes) will pass while keeping full Swagger docs via Flask-RESTX.
 """
-
-from flask import jsonify, request
+import inspect
+from flask import jsonify, request, current_app as app
 from flask_restx import Api, Resource, fields, reqparse
-from flask import current_app as app
 from werkzeug.exceptions import (
     NotFound,
     BadRequest,
@@ -33,11 +32,8 @@ from werkzeug.exceptions import (
     MethodNotAllowed,
     UnsupportedMediaType,
 )
-import inspect
-
 from service.models import Customer, DataValidationError, ALLOWED_STATUSES
 from service.common import status  # HTTP Status Codes
-
 
 ######################################################################
 # Configure Flask-RESTX (keeps /apidocs/)
@@ -103,12 +99,14 @@ customer_args.add_argument("page", type=int, location="args", required=False, he
 # Helper: normalize JSON error responses (tests expect {"error","message"})
 ######################################################################
 def _error_payload(error_name: str, message: str):
+    """Create standardized error response payload"""
     return {"error": error_name, "message": message}
 
 
 # Register JSON error handlers so raising werkzeug exceptions returns the expected body.
 @api.errorhandler(DataValidationError)
 def _handle_data_validation(error):
+    """Handle DataValidationError"""
     msg = str(error)
     app.logger.error("DataValidationError: %s", msg)
     return _error_payload("Bad Request", msg), status.HTTP_400_BAD_REQUEST
@@ -116,6 +114,7 @@ def _handle_data_validation(error):
 
 @api.errorhandler(BadRequest)
 def _handle_bad_request(error):
+    """Handle BadRequest error"""
     # werkzeug BadRequest may have .description
     msg = getattr(error, "description", str(error))
     return _error_payload("Bad Request", msg), status.HTTP_400_BAD_REQUEST
@@ -123,12 +122,14 @@ def _handle_bad_request(error):
 
 @api.errorhandler(NotFound)
 def _handle_not_found(error):
+    """Handle NotFound error"""
     msg = getattr(error, "description", str(error))
     return _error_payload("Not Found", msg), status.HTTP_404_NOT_FOUND
 
 
 @api.errorhandler(InternalServerError)
 def _handle_internal_server(error):
+    """Handle InternalServerError"""
     msg = getattr(error, "description", "Internal Server Error")
     app.logger.exception("InternalServerError: %s", msg)
     return _error_payload("Internal Server Error", msg), status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -136,12 +137,14 @@ def _handle_internal_server(error):
 
 @api.errorhandler(MethodNotAllowed)
 def _handle_method_not_allowed(error):
+    """Handle MethodNotAllowed error"""
     msg = getattr(error, "description", str(error))
     return _error_payload("Method Not Allowed", msg), status.HTTP_405_METHOD_NOT_ALLOWED
 
 
 @api.errorhandler(UnsupportedMediaType)
 def _handle_unsupported_media_type(error):
+    """Handle UnsupportedMediaType error"""
     msg = getattr(error, "description", str(error))
     return _error_payload("Unsupported Media Type", msg), status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
 
@@ -151,6 +154,7 @@ def _handle_unsupported_media_type(error):
 # (Prefer raising exceptions rather than api.abort so our handlers run)
 ######################################################################
 def _raise_http(code: int, message: str):
+    """Raise appropriate HTTP exception based on code"""
     if code == 400:
         raise BadRequest(message)
     if code == 404:
@@ -196,7 +200,8 @@ class HealthResource(Resource):
 ######################################################################
 # Helper: parse and validate query params (tests expect strict messages)
 ######################################################################
-def _parse_and_validate_query_args(raw_args):
+def _parse_and_validate_query_args(raw_args):  # pylint: disable=too-many-branches
+    """Parse and validate query parameters"""
     allowed = {"first_name", "last_name", "address", "id", "limit", "page"}
     # Detect unexpected params
     for k in raw_args.keys():
@@ -212,7 +217,7 @@ def _parse_and_validate_query_args(raw_args):
         v = raw_args.get("limit")
         try:
             limit = int(v)
-        except Exception:
+        except ValueError:
             _raise_http(400, "limit must be an integer")
         if limit <= 0:
             _raise_http(400, "limit must be a positive integer")
@@ -222,7 +227,7 @@ def _parse_and_validate_query_args(raw_args):
         v = raw_args.get("page")
         try:
             page = int(v)
-        except Exception:
+        except ValueError:
             _raise_http(400, "page must be an integer")
         if page <= 0:
             page = 1
@@ -252,7 +257,7 @@ class CustomerCollection(Resource):
     @api.expect(customer_args)
     @api.marshal_list_with(customer_model)
     @api.response(400, "Invalid query parameters")
-    def get(self):
+    def get(self):  # pylint: disable=too-many-branches
         """
         Retrieve a list of Customers
 
@@ -267,7 +272,7 @@ class CustomerCollection(Resource):
         if not filters and limit is None:
             try:
                 customers = Customer.all()
-            except Exception as err:
+            except Exception:  # pylint: disable=broad-except
                 app.logger.exception("Unexpected error while listing customers")
                 _raise_http(500, "Internal Server Error")
             results = [c.serialize() for c in customers]
@@ -276,7 +281,7 @@ class CustomerCollection(Resource):
         # Otherwise build query if available, else fallback to Python filtering
         try:
             query_obj = Customer.query
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             query_obj = None
 
         try:
@@ -314,12 +319,12 @@ class CustomerCollection(Resource):
                     if page is None or page <= 0:
                         page = 1
                     offset = (page - 1) * limit
-                    customers = customers[offset : offset + limit]
+                    customers = customers[offset:offset + limit]
 
         except BadRequest:
             raise
-        except Exception as err:
-            app.logger.exception("Unexpected error while listing customers: %s", err)
+        except Exception:  # pylint: disable=broad-except
+            app.logger.exception("Unexpected error while listing customers")
             _raise_http(500, "Internal Server Error")
 
         results = [c.serialize() for c in customers]
@@ -330,7 +335,7 @@ class CustomerCollection(Resource):
     @api.expect(create_model)
     @api.marshal_with(customer_model, code=201)
     @api.response(400, "Invalid input data")
-    def post(self):
+    def post(self):  # pylint: disable=too-many-branches
         """
         Create a new Customer
         """
@@ -368,19 +373,19 @@ class CustomerCollection(Resource):
                     customer.deserialize(data)  # pragma: no cover
             else:
                 customer.deserialize(data)
-        except DataValidationError as e:
-            app.logger.error("Data validation error: %s", e)
-            _raise_http(400, str(e))
-        except Exception:
+        except DataValidationError as err:
+            app.logger.error("Data validation error: %s", err)
+            _raise_http(400, str(err))
+        except Exception:  # pylint: disable=broad-except
             app.logger.exception("Unexpected error creating customer")
             _raise_http(500, "Internal Server Error")
 
         try:
             customer.create()
-        except DataValidationError as e:
-            app.logger.error("Data validation error: %s", e)
-            _raise_http(400, str(e))
-        except Exception:
+        except DataValidationError as err:
+            app.logger.error("Data validation error: %s", err)
+            _raise_http(400, str(err))
+        except Exception:  # pylint: disable=broad-except
             app.logger.exception("Unexpected error creating customer")
             _raise_http(500, "Internal Server Error")
 
@@ -399,6 +404,7 @@ class CustomerResource(Resource):
 
     @staticmethod
     def _validate_customer_id(customer_id):
+        """Validate customer ID is an integer"""
         if not str(customer_id).isdigit():
             _raise_http(400, "customer id must be an integer")
         return int(customer_id)
@@ -407,12 +413,13 @@ class CustomerResource(Resource):
     @api.marshal_with(customer_model)
     @api.response(404, "Customer not found")
     def get(self, customer_id):
+        """Get a customer by ID"""
         customer_id = self._validate_customer_id(customer_id)
         app.logger.info("Request to retrieve customer with id [%s]", customer_id)
 
         try:
             customer = Customer.find(customer_id)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             app.logger.exception("Unexpected error reading customer %s", customer_id)
             _raise_http(500, "Internal Server Error")
 
@@ -427,13 +434,14 @@ class CustomerResource(Resource):
     @api.marshal_with(customer_model)
     @api.response(404, "Customer not found")
     @api.response(400, "Invalid input data")
-    def put(self, customer_id):
+    def put(self, customer_id):  # pylint: disable=too-many-branches,too-many-statements
+        """Update a customer"""
         customer_id = self._validate_customer_id(customer_id)
         app.logger.info("Request to update customer with id [%s]", customer_id)
 
         try:
             customer = Customer.find(customer_id)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             app.logger.exception("Unexpected error locating customer %s", customer_id)
             _raise_http(500, "Internal Server Error")
 
@@ -491,10 +499,10 @@ class CustomerResource(Resource):
                 customer.deserialize(current)
 
             customer.update()
-        except DataValidationError as e:
-            app.logger.error("Data validation error during update: %s", e)
-            _raise_http(400, str(e))
-        except Exception:
+        except DataValidationError as err:
+            app.logger.error("Data validation error during update: %s", err)
+            _raise_http(400, str(err))
+        except Exception:  # pylint: disable=broad-except
             app.logger.exception("Unexpected error updating customer %s", customer_id)
             _raise_http(500, "Internal Server Error")
 
@@ -504,12 +512,13 @@ class CustomerResource(Resource):
     @api.doc("delete_customer")
     @api.response(204, "Customer deleted")
     def delete(self, customer_id):
+        """Delete a customer"""
         customer_id = self._validate_customer_id(customer_id)
         app.logger.info("Request to delete customer with id [%s]", customer_id)
 
         try:
             customer = Customer.find(customer_id)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             app.logger.exception("Unexpected error locating customer %s", customer_id)
             _raise_http(500, "Internal Server Error")
 
@@ -519,7 +528,7 @@ class CustomerResource(Resource):
             except DataValidationError:
                 app.logger.exception("Unexpected error deleting customer %s", customer_id)
                 _raise_http(500, "Internal Server Error")
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 _raise_http(500, "Internal Server Error")
 
         return "", status.HTTP_204_NO_CONTENT
@@ -535,6 +544,7 @@ class CustomerStatusResource(Resource):
 
     @staticmethod
     def _validate_customer_id(customer_id):
+        """Validate customer ID is an integer"""
         if not str(customer_id).isdigit():
             _raise_http(400, "customer id must be an integer")
         return int(customer_id)
@@ -544,20 +554,20 @@ class CustomerStatusResource(Resource):
     @api.marshal_with(customer_model)
     @api.response(404, "Customer not found")
     @api.response(400, "Invalid status value")
-    def put(self, customer_id):
+    def put(self, customer_id):  # pylint: disable=too-many-branches
+        """Update customer status"""
         customer_id = self._validate_customer_id(customer_id)
         app.logger.info("Request to update status for customer [%s]", customer_id)
 
         try:
             customer = Customer.find(customer_id)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             app.logger.exception("Unexpected error retrieving customer %s", customer_id)
             _raise_http(500, "Internal Server Error")
 
         if not customer:
             _raise_http(404, "customer not found")
 
-        # <<< FIX HERE >>>
         if not request.is_json:
             _raise_http(415, "Content-Type must be application/json")
 
@@ -574,13 +584,12 @@ class CustomerStatusResource(Resource):
             if customer.status != new_status:
                 customer.set_status(new_status)
                 customer.update()
-        except DataValidationError as e:
-            app.logger.error("Validation error setting status for %s: %s", customer_id, e)
-            _raise_http(400, str(e))
-        except Exception:
+        except DataValidationError as err:
+            app.logger.error("Validation error setting status for %s: %s", customer_id, err)
+            _raise_http(400, str(err))
+        except Exception:  # pylint: disable=broad-except
             app.logger.exception("Unexpected error setting status for %s", customer_id)
             _raise_http(500, "Internal Server Error")
 
         app.logger.info("Status set for customer %s -> '%s'", customer_id, customer.status)
         return customer.serialize(), status.HTTP_200_OK
-
