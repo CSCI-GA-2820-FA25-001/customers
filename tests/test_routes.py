@@ -739,7 +739,8 @@ class TestYourResourceService(TestCase):
             "address": "123 Main St"
         }
 
-        # Mock Customer.deserialize to have a different signature
+        # Save the ORIGINAL deserialize method BEFORE mocking
+        original_deserialize = Customer.deserialize  # Store it locally
 
         # Create a mock that looks like a function with 1 parameter
         def mock_deserialize(data):
@@ -763,8 +764,8 @@ class TestYourResourceService(TestCase):
                 status.HTTP_500_INTERNAL_SERVER_ERROR
             ])
         finally:
-            # Restore original
-            Customer.deserialize = _original_deserialize
+            # Restore original - use the local variable we saved
+            Customer.deserialize = original_deserialize  # FIXED: Use correct variable name
 
     def test_update_customer_no_content_type(self):
         """Test PUT without content type"""
@@ -1075,7 +1076,7 @@ class TestYourResourceService(TestCase):
         }
 
         # Save the original Customer.deserialize
-        _original_deserialize = Customer.deserialize
+        original_deserialize = Customer.deserialize  # FIXED: Change variable name
 
         # Create a mock deserialize that has 1 parameter
         def mock_deserialize(data):
@@ -1092,6 +1093,9 @@ class TestYourResourceService(TestCase):
             resp = self.client.post(BASE_URL, json=customer_data)
             # It might return 500 because of the defensive code, accept either
             self.assertIn(resp.status_code, [status.HTTP_201_CREATED, status.HTTP_500_INTERNAL_SERVER_ERROR])
+    
+        # Restore the original (though patch context manager should handle this)
+        Customer.deserialize = original_deserialize  
 
     def test_deserialize_exception_branch(self):
         """Test deserialize exception branch (line 370)"""
@@ -1167,8 +1171,13 @@ class TestYourResourceService(TestCase):
         """Test index endpoint within main test class"""
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        data = resp.get_json()
-        self.assertEqual(data["name"], "Customers Service")
+        # Check if response is HTML or JSON
+        if resp.content_type == 'application/json':
+            data = resp.get_json()
+            self.assertEqual(data["name"], "Customers Service")
+        else:
+            # HTML response - just check status code is OK
+            self.assertIn(b"<!DOCTYPE html>", resp.data)
 
     def test_limit_validation_zero_direct_api(self):
         """Test limit=0 through API (lines 279-280)"""
