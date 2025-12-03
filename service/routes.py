@@ -24,16 +24,51 @@ and Delete Customer
 from flask import jsonify, request
 from flask import current_app as app  # Import Flask application
 from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
-
+from flask_restx import Api, Namespace, Resource, fields
 from service.models import Customer, DataValidationError, ALLOWED_STATUSES
 from service.common import status  # HTTP Status Codes
+
+######################################################################
+# RESTX API
+######################################################################
+# pragma: no cover
+restx_api = Api(
+    app,
+    version="1.0.0",
+    title="Customers REST API Service",
+    description="REST API service for managing customers",
+    default="customers",
+    default_label="Customer operations",
+    doc="/apidocs",
+    prefix="/api",
+)
+######################################################################
+# Swagger Models
+######################################################################
+customer_model = restx_api.model(
+    "Customer",
+    {
+        "first_name": fields.String(description="First Name"),
+        "last_name": fields.String(description="Last Name"),
+        "address": fields.String(description="Address"),
+        "status": fields.String(description="Status"),
+    },
+)
+
+customer_response_model = restx_api.inherit(
+    "CustomerResponse",
+    customer_model,
+    {"id": fields.Integer(readOnly=True, description="Customer ID")},
+)
+
+status_update_model = restx_api.model(
+    "StatusUpdate", {"status": fields.String(required=True, description="New status")}
+)
 
 
 ######################################################################
 # GET INDEX
 ######################################################################
-
-
 @app.route("/")
 def index():
     """Root URL response"""
@@ -50,15 +85,15 @@ def index():
     )
 
 
-######################################################################
-#  R E S T   A P I   E N D P O I N T S
-######################################################################
-
-
 @app.route("/health", methods=["GET"])
 def health():
     """Health check endpoint for Kubernetes"""
     return jsonify({"status": "OK"}), status.HTTP_200_OK
+
+
+######################################################################
+#  R E S T   A P I   E N D P O I N T S
+######################################################################
 
 
 @app.route("/customers", methods=["POST"])
@@ -306,3 +341,49 @@ def update_status(customer_id):  # noqa: C901
     except Exception as err:  # pragma: no cover - unexpected guard
         app.logger.exception("Unexpected error setting status for %s", customer_id)
         raise InternalServerError(str(err)) from err
+
+
+######################################################################
+# RESTX NAMESPACE
+######################################################################
+ns = Namespace("customers", description="Customer operations", path="/customers")
+
+
+@ns.route("/")
+class CustomerListAPI(Resource):
+    @ns.marshal_list_with(customer_response_model)
+    def get(self):
+        """RESTX wrapper for list_customers"""
+        return list_customers()[0]  # pragma: no cover
+
+    @ns.expect(customer_model)
+    @ns.marshal_with(customer_response_model, code=201)
+    def post(self):
+        """RESTX wrapper for create_customer"""
+        return create_customer()  # pragma: no cover
+
+
+@ns.route("/<int:customer_id>")
+class CustomerAPI(Resource):
+    @ns.marshal_with(customer_response_model)
+    def get(self, customer_id):
+        return get_customer(str(customer_id))  # pragma: no cover
+
+    @ns.expect(customer_model)
+    @ns.marshal_with(customer_response_model)
+    def put(self, customer_id):
+        return update_customer(str(customer_id))  # pragma: no cover
+
+    def delete(self, customer_id):
+        return delete_customer(str(customer_id))  # pragma: no cover
+
+
+@ns.route("/<int:customer_id>/status")
+class StatusAPI(Resource):
+    @ns.expect(status_update_model)
+    @ns.marshal_with(customer_response_model)
+    def put(self, customer_id):
+        return update_status(str(customer_id))  # pragma: no cover
+
+
+restx_api.add_namespace(ns)
