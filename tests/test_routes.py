@@ -739,7 +739,6 @@ class TestYourResourceService(TestCase):
         }
 
         # Mock Customer.deserialize to have a different signature
-        _original_deserialize = Customer.deserialize
 
         # Create a mock that looks like a function with 1 parameter
         def mock_deserialize(data):
@@ -1221,10 +1220,13 @@ class TestYourResourceService(TestCase):
             class MockQuery:
                 def all(self):
                     raise RuntimeError("Database filter error")
+
                 def offset(self, *args):
                     return self
+
                 def limit(self, *args):
                     return self
+
             return MockQuery()
 
         Customer.query.filter = mock_filter

@@ -33,7 +33,8 @@ def register_error_handlers(app):
             "message": str(error.description or "Invalid request")
         }), 400
 
-    @app.errorhandler(401)
+
+    @app.errorhandler(401)  # Note: TWO blank lines above this line
     def unauthorized(error):
         """Unauthorized"""
         return jsonify({
@@ -49,7 +50,8 @@ def register_error_handlers(app):
             "message": "Access denied"
         }), 403
 
-    @app.errorhandler(404)
+
+    @app.errorhandler(404)  # Note: TWO blank lines above this line
     def not_found(error):
         """Not Found"""
         # Handle Flask-RESTX validation errors for non-integer IDs
@@ -65,7 +67,8 @@ def register_error_handlers(app):
             "message": "Resource not found"
         }), 404
 
-    @app.errorhandler(405)
+
+    @app.errorhandler(405)  # Note: TWO blank lines above this line
     def method_not_allowed(error):
         """Method Not Allowed"""
         return jsonify({
@@ -73,7 +76,8 @@ def register_error_handlers(app):
             "message": str(error.description or "Method not allowed")
         }), 405
 
-    @app.errorhandler(415)
+
+    @app.errorhandler(415)  # Note: TWO blank lines above this line
     def unsupported_media_type(error):
         """Unsupported Media Type"""
         return jsonify({
@@ -81,7 +85,8 @@ def register_error_handlers(app):
             "message": "Content-Type must be application/json"
         }), 415
 
-    @app.errorhandler(500)
+
+    @app.errorhandler(500)  # Note: TWO blank lines above this line
     def internal_error(error):
         """Internal Server Error"""
         return jsonify({
