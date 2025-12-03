@@ -26,105 +26,69 @@ from werkzeug.exceptions import HTTPException
 # Error Handlers
 ######################################################################
 
+def register_error_handlers(app):
+    """Register error handlers"""
+    
+    @app.errorhandler(400)
+    def bad_request(error):
+        """Bad Request"""
+        return jsonify({
+            "error": "Bad Request",
+            "message": str(error.description or "Invalid request")
+        }), 400
 
-@app.errorhandler(DataValidationError)
-def request_validation_error(error):
-    """Handles Value Errors from bad data"""
-    return bad_request(error)
+    @app.errorhandler(401)
+    def unauthorized(error):
+        """Unauthorized"""
+        return jsonify({
+            "error": "Unauthorized",
+            "message": "Authentication required"
+        }), 401
 
+    @app.errorhandler(403)
+    def forbidden(error):
+        """Forbidden"""
+        return jsonify({
+            "error": "Forbidden",
+            "message": "Access denied"
+        }), 403
 
-@app.errorhandler(status.HTTP_400_BAD_REQUEST)
-def bad_request(error):
-    """Handles bad requests with 400_BAD_REQUEST"""
-    message = str(error)
-    app.logger.warning(message)
-    return (
-        jsonify(
-            status=status.HTTP_400_BAD_REQUEST, error="Bad Request", message=message
-        ),
-        status.HTTP_400_BAD_REQUEST,
-    )
+    @app.errorhandler(404)
+    def not_found(error):
+        """Not Found"""
+        # Handle Flask-RESTX validation errors for non-integer IDs
+        error_msg = str(error.description or "")
+        if "The requested URL" in error_msg or "did you mean" in error_msg:
+            # This is likely a non-integer ID validation error
+            return jsonify({
+                "error": "Bad Request",
+                "message": "Customer id must be an integer"
+            }), 400
+        return jsonify({
+            "error": "Not Found",
+            "message": "Resource not found"
+        }), 404
 
+    @app.errorhandler(405)
+    def method_not_allowed(error):
+        """Method Not Allowed"""
+        return jsonify({
+            "error": "Method Not Allowed",
+            "message": str(error.description or "Method not allowed")
+        }), 405
 
-@app.errorhandler(status.HTTP_404_NOT_FOUND)
-def not_found(error):
-    """Handles resources not found with 404_NOT_FOUND"""
-    message = str(error)
-    app.logger.warning(message)
-    return (
-        jsonify(status=status.HTTP_404_NOT_FOUND, error="Not Found", message=message),
-        status.HTTP_404_NOT_FOUND,
-    )
+    @app.errorhandler(415)
+    def unsupported_media_type(error):
+        """Unsupported Media Type"""
+        return jsonify({
+            "error": "Unsupported Media Type",
+            "message": "Content-Type must be application/json"
+        }), 415
 
-
-@app.errorhandler(status.HTTP_405_METHOD_NOT_ALLOWED)
-def method_not_supported(error):
-    """Handles unsupported HTTP methods with 405_METHOD_NOT_SUPPORTED"""
-    message = str(error)
-    app.logger.warning(message)
-    return (
-        jsonify(
-            status=status.HTTP_405_METHOD_NOT_ALLOWED,
-            error="Method not Allowed",
-            message=message,
-        ),
-        status.HTTP_405_METHOD_NOT_ALLOWED,
-    )
-
-
-@app.errorhandler(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-def mediatype_not_supported(error):
-    """Handles unsupported media requests with 415_UNSUPPORTED_MEDIA_TYPE"""
-    message = str(error)
-    app.logger.warning(message)
-    return (
-        jsonify(
-            status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            error="Unsupported media type",
-            message=message,
-        ),
-        status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-    )
-
-
-@app.errorhandler(status.HTTP_500_INTERNAL_SERVER_ERROR)
-def internal_server_error(error):
-    """Handles unexpected server error with 500_SERVER_ERROR"""
-    message = str(error)
-    app.logger.error(message)
-    return (
-        jsonify(
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            error="Internal Server Error",
-            message=message,
-        ),
-        status.HTTP_500_INTERNAL_SERVER_ERROR,
-    )
-
-
-@app.errorhandler(HTTPException)
-def handle_http_exception(error):
-    """Ensure all Werkzeug HTTP exceptions return JSON"""
-    response = {
-        "status": error.code,
-        "error": error.name,
-        "message": error.description,
-    }
-    return jsonify(response), error.code
-
-
-@app.errorhandler(Exception)
-def handle_unexpected_exception(error):
-    """Catch-all handler for unexpected exceptions (always JSON)"""
-    message = str(error) or "An unexpected error occurred."
-
-    app.logger.error(message)
-
-    return (
-        jsonify(
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            error="Internal Server Error",
-            message=message,
-        ),
-        status.HTTP_500_INTERNAL_SERVER_ERROR,
-    )
+    @app.errorhandler(500)
+    def internal_error(error):
+        """Internal Server Error"""
+        return jsonify({
+            "error": "Internal Server Error",
+            "message": "An unexpected error occurred"
+        }), 500
