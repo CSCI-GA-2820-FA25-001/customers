@@ -25,6 +25,7 @@ JSON error shapes) will pass while keeping full Swagger docs via Flask-RESTX.
 import inspect
 from flask import jsonify, request, current_app as app
 from flask_restx import Api, Resource, fields, reqparse
+from flask import render_template
 from werkzeug.exceptions import (
     NotFound,
     BadRequest,
@@ -172,6 +173,12 @@ def _raise_http(code: int, message: str):
 ######################################################################
 @app.route("/")
 def index():
+    """Render the admin UI"""
+    return render_template("index.html")
+
+
+@app.route("/api")
+def api_info():
     """Root URL response - outside of API namespace"""
     return (
         jsonify(
