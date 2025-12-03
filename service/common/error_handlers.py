@@ -22,9 +22,10 @@ from flask import jsonify
 # Error Handlers
 ######################################################################
 
+
 def register_error_handlers(app):
     """Register error handlers"""
-    
+
     @app.errorhandler(400)
     def bad_request(error):
         """Bad Request"""
@@ -32,7 +33,6 @@ def register_error_handlers(app):
             "error": "Bad Request",
             "message": str(error.description or "Invalid request")
         }), 400
-
 
     @app.errorhandler(401)  # Note: TWO blank lines above this line
     def unauthorized(error):
@@ -50,7 +50,6 @@ def register_error_handlers(app):
             "message": "Access denied"
         }), 403
 
-
     @app.errorhandler(404)  # Note: TWO blank lines above this line
     def not_found(error):
         """Not Found"""
@@ -67,7 +66,6 @@ def register_error_handlers(app):
             "message": "Resource not found"
         }), 404
 
-
     @app.errorhandler(405)  # Note: TWO blank lines above this line
     def method_not_allowed(error):
         """Method Not Allowed"""
@@ -76,7 +74,6 @@ def register_error_handlers(app):
             "message": str(error.description or "Method not allowed")
         }), 405
 
-
     @app.errorhandler(415)  # Note: TWO blank lines above this line
     def unsupported_media_type(error):
         """Unsupported Media Type"""
@@ -84,7 +81,6 @@ def register_error_handlers(app):
             "error": "Unsupported Media Type",
             "message": "Content-Type must be application/json"
         }), 415
-
 
     @app.errorhandler(500)  # Note: TWO blank lines above this line
     def internal_error(error):

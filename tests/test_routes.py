@@ -1093,9 +1093,9 @@ class TestYourResourceService(TestCase):
             resp = self.client.post(BASE_URL, json=customer_data)
             # It might return 500 because of the defensive code, accept either
             self.assertIn(resp.status_code, [status.HTTP_201_CREATED, status.HTTP_500_INTERNAL_SERVER_ERROR])
-    
+
         # Restore the original (though patch context manager should handle this)
-        Customer.deserialize = original_deserialize  
+        Customer.deserialize = original_deserialize
 
     def test_deserialize_exception_branch(self):
         """Test deserialize exception branch (line 370)"""
