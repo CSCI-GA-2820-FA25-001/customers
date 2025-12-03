@@ -94,8 +94,9 @@ class TestYourResourceService(TestCase):
         """It should call the home page"""
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        data = resp.get_json()
-        self.assertEqual(data["name"], "Customers Service")
+        # Check for HTML content
+        self.assertIn(b"<!DOCTYPE html>", resp.data)
+        self.assertIn(b"Customer Administration", resp.data)
 
     # ----------------------------------------------------------
     # TEST READ

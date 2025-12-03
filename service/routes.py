@@ -23,6 +23,7 @@ and Delete Customer
 
 from flask import jsonify, request
 from flask import current_app as app  # Import Flask application
+from flask import render_template
 from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
 from flask_restx import Api, Namespace, Resource, fields
 from service.models import Customer, DataValidationError, ALLOWED_STATUSES
@@ -72,6 +73,12 @@ status_update_model = restx_api.model(
 
 @app.route("/")
 def index():
+    """Render the admin UI"""
+    return render_template("index.html")
+
+
+@app.route("/api")
+def api_info():
     """Root URL response"""
     return (
         jsonify(
