@@ -353,41 +353,53 @@ ns = Namespace("customers", description="Customer operations")
 
 @ns.route("/")
 class CustomerListAPI(Resource):
+    """RESTX wrapper for /api/customers list operations."""
+
     @ns.marshal_list_with(customer_response_model)
     def get(self):
-        flask_resp, code = list_customers()
+        """RESTX wrapper that forwards GET /api/customers to the Flask route."""
+        flask_resp, _ = list_customers()
         return flask_resp.get_json()
 
     @ns.expect(customer_model)
     @ns.marshal_with(customer_response_model, code=201)
     def post(self):
-        flask_resp, code = create_customer()
+        """RESTX wrapper that forwards POST /api/customers to the Flask route."""
+        flask_resp, _ = create_customer()
         return flask_resp.get_json(), 201
 
 
 @ns.route("/<int:customer_id>")
 class CustomerAPI(Resource):
+    """RESTX wrapper for /api/customers/{customer_id} operations."""
+
     @ns.marshal_with(customer_response_model)
     def get(self, customer_id):
+        """RESTX wrapper that forwards GET /api/customers/{customer_id} to the Flask route."""
         flask_resp, code = get_customer(str(customer_id))
         return flask_resp.get_json(), code
 
     @ns.expect(customer_model)
     @ns.marshal_with(customer_response_model)
     def put(self, customer_id):
+        """RESTX wrapper that forwards PUT /api/customers/{customer_id} to the Flask route."""
         flask_resp, code = update_customer(str(customer_id))
         return flask_resp.get_json(), code
 
     def delete(self, customer_id):
+        """RESTX wrapper that forwards DELETE /api/customers/{customer_id} to the Flask route."""
         _, code = delete_customer(str(customer_id))
         return "", code
 
 
 @ns.route("/<int:customer_id>/status")
 class StatusAPI(Resource):
+    """RESTX wrapper for /api/customers/{customer_id}/status operations."""
+
     @ns.expect(status_update_model)
     @ns.marshal_with(customer_response_model)
     def put(self, customer_id):
+        """RESTX wrapper that forwards PUT /api/customers/{customer_id}/status to the Flask route."""
         flask_resp, code = update_status(str(customer_id))
         return flask_resp.get_json(), code
 

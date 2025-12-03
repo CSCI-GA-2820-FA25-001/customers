@@ -23,6 +23,7 @@ import os
 import logging
 from unittest import TestCase
 from wsgi import app
+from service import routes
 from service.common import status
 from service.models import db, Customer, DataValidationError
 from tests.factories import CustomerFactory
@@ -661,10 +662,9 @@ def test_restx_create_customer(client=app.test_client()):
 
 def test_restx_unexpected_exception(monkeypatch, client=app.test_client()):
     """Covers app.logger.exception(...) in RESTX error handler"""
-    from service import routes
 
     def boom():
-        raise Exception("Simulated crash")
+        raise RuntimeError("Simulated crash")
 
     monkeypatch.setattr(routes, "list_customers", boom)
     resp = client.get("/api/customers/")
