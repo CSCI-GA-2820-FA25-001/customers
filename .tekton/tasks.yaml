@@ -5,7 +5,7 @@ metadata:
   name: echo
 spec:
   workspaces:
-    - name: shared-workspace
+    - name: pipeline-workspace
   steps:
     - name: echo
       image: registry.access.redhat.com/ubi9/ubi-minimal:latest
@@ -23,12 +23,12 @@ spec:
     - name: revision
       default: main
   workspaces:
-    - name: shared-workspace
+    - name: output
   steps:
     - name: clone
       image: alpine/git
       script: |
-        cd $(workspaces.shared-workspace.path)
+        cd $(workspaces.output.path)
         rm -rf repo || true
         git clone $(params.url) repo
         cd repo
@@ -40,19 +40,26 @@ kind: Task
 metadata:
   name: lint
 spec:
+  params:
+      - name: path
+        default: service
   workspaces:
-    - name: shared-workspace
+    - name: source
   steps:
     - name: install-tools
       image: python:3.10
       script: |
-        cd $(workspaces.shared-workspace.path)/repo
+        cd $(workspaces.source.path)/repo
+        # Install everything first
         pip install flake8 pylint pipenv
         pipenv install --dev --system
+        # Then run lint checks
+        flake8 $(params.path) tests || exit 1
+        pylint $(params.path) tests || exit 1
     - name: run-lint
       image: python:3.10
       script: |
-        cd $(workspaces.shared-workspace.path)/repo
+        cd $(workspaces.source.path)/repo
         flake8 service tests || exit 1
         pylint service tests || exit 1
 
@@ -63,12 +70,12 @@ metadata:
   name: tests
 spec:
   workspaces:
-    - name: shared-workspace
+    - name: source
   steps:
     - name: run-tests
-      image: python:3.10
+      image: python:3.11
       script: |
-        cd $(workspaces.shared-workspace.path)/repo
+        cd $(workspaces.source.path)/repo
         pip install pipenv
         pipenv install --dev --system
         pytest --pspec
@@ -77,7 +84,7 @@ spec:
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: build-image
+  name: build
 spec:
   params:
     - name: IMAGE
@@ -86,14 +93,14 @@ spec:
     - name: CONTEXT
       default: repo
   workspaces:
-    - name: shared-workspace
+    - name: source
   steps:
     - name: build
       image: quay.io/containers/buildah:latest
       securityContext:
         privileged: true
       script: |
-        cd $(workspaces.shared-workspace.path)
+        cd $(workspaces.source.path)
         buildah bud \
           -f $(params.DOCKERFILE) \
           -t $(params.IMAGE) \
@@ -114,13 +121,14 @@ spec:
   params:
     - name: IMAGE
     - name: DEPLOYMENT
+      default: customers
   workspaces:
-    - name: shared-workspace
+    - name: source
   steps:
     - name: apply
       image: bitnami/kubectl:latest
       script: |
-        cd $(workspaces.shared-workspace.path)/repo/k8s
+        cd $(workspaces.source.path)/repo/k8s
         kubectl apply -f .
 
     - name: patch-image
@@ -133,20 +141,22 @@ spec:
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: behave-tests
+  name: behave
 spec:
+  params:
+      - name: base-url
   workspaces:
-    - name: shared-workspace
+    - name: source
   steps:
     - name: install-deps
-      image: python:3.10
+      image: python:3.11
       script: |
-        cd $(workspaces.shared-workspace.path)/repo
+        cd $(workspaces.source.path)/repo
         pip install pipenv
         pipenv install --dev --system
 
     - name: run-behave
-      image: python:3.10
+      image: python:3.11
       script: |
-        cd $(workspaces.shared-workspace.path)/repo/tests/bdd
+        cd $(workspaces.source.path)/repo/tests/bdd
         behave
