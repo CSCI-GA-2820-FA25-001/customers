@@ -36,7 +36,13 @@ from service.routes import (
     _handle_method_not_allowed,
     _handle_unsupported_media_type,
     _raise_http,
-    _parse_and_validate_query_args
+    _parse_and_validate_query_args,
+    _parse_limit_param,
+    _parse_page_param,
+    _parse_id_param,
+    _parse_string_filters,
+    CustomerCollection,
+    CustomerResource
 )
 from tests.factories import CustomerFactory
 DATABASE_URI = os.getenv(
@@ -1081,7 +1087,7 @@ class TestYourResourceService(TestCase):
         def mock_deserialize(data):
             # This version only takes data parameter
             customer = Customer()
-            customer.first_name = data.get('first_name', '')
+            customer.first_name = data.get('first_ name', '')
             customer.last_name = data.get('last_name', '')
             customer.address = data.get('address', '')
             return customer
@@ -1368,10 +1374,287 @@ class TestYourResourceService(TestCase):
         data = resp.get_json()
         self.assertEqual(len(data), 1)
 
+    def test_handle_data_validation_error_with_description(self):
+        """Test DataValidationError handler with description attribute"""
+        with app.app_context():
+            error = DataValidationError("Test error")
+            error.description = "Custom description"
+            response = _handle_data_validation(error)
+            self.assertEqual(response[1], status.HTTP_400_BAD_REQUEST)
+            data = response[0]
+            self.assertEqual(data["error"], "Bad Request")
+            self.assertIn("Test error", data["message"])
+
+    def test_handle_bad_request_with_description(self):
+        """Test BadRequest handler with description attribute"""
+        with app.app_context():
+            error = BadRequest("Test error")
+            error.description = "Custom description"
+            response = _handle_bad_request(error)
+            self.assertEqual(response[1], status.HTTP_400_BAD_REQUEST)
+            data = response[0]
+            self.assertEqual(data["error"], "Bad Request")
+            self.assertIn("Custom description", data["message"])
+
+    def test_handle_internal_server_error_with_description(self):
+        """Test InternalServerError handler with description attribute"""
+        with app.app_context():
+            error = InternalServerError("Test error")
+            error.description = "Custom description"
+            response = _handle_internal_server(error)
+            self.assertEqual(response[1], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            data = response[0]
+            self.assertEqual(data["error"], "Internal Server Error")
+            self.assertIn("Custom description", data["message"])
+
+    def test_handle_method_not_allowed_with_description(self):
+        """Test MethodNotAllowed handler with description attribute"""
+        with app.app_context():
+            error = MethodNotAllowed("Test error")
+            error.description = "Custom description"
+            response = _handle_method_not_allowed(error)
+            self.assertEqual(response[1], status.HTTP_405_METHOD_NOT_ALLOWED)
+            data = response[0]
+            self.assertEqual(data["error"], "Method Not Allowed")
+            self.assertIn("Custom description", data["message"])
+
+    def test_handle_unsupported_media_type_with_description(self):
+        """Test UnsupportedMediaType handler with description attribute"""
+        with app.app_context():
+            error = UnsupportedMediaType("Test error")
+            error.description = "Custom description"
+            response = _handle_unsupported_media_type(error)
+            self.assertEqual(response[1], status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+            data = response[0]
+            self.assertEqual(data["error"], "Unsupported Media Type")
+            self.assertIn("Custom description", data["message"])
+
+    def test_parse_limit_param_edge_cases(self):
+        """Test _parse_limit_param edge cases"""
+        # Test with valid limit
+        self.assertEqual(_parse_limit_param({"limit": "10"}), 10)
+        # Test with None
+        self.assertIsNone(_parse_limit_param({}))
+        # Test that it raises exception (coverage for exception branches)
+        with self.assertRaises(Exception):
+            _parse_limit_param({"limit": "invalid"})
+        with self.assertRaises(Exception):
+            _parse_limit_param({"limit": "0"})
+        with self.assertRaises(Exception):
+            _parse_limit_param({"limit": "-5"})
+
+    def test_parse_page_param_edge_cases(self):
+        """Test _parse_page_param edge cases"""
+        # Test with valid page
+        self.assertEqual(_parse_page_param({"page": "2"}), 2)
+        # Test with None
+        self.assertIsNone(_parse_page_param({}))
+        # Test with page=0 (should become 1)
+        self.assertEqual(_parse_page_param({"page": "0"}), 1)
+        # Test that it raises exception for invalid input
+        with self.assertRaises(Exception):
+            _parse_page_param({"page": "invalid"})
+
+    def test_parse_id_param_edge_cases(self):
+        """Test _parse_id_param edge cases"""
+        # Test with valid id
+        self.assertEqual(_parse_id_param("123"), 123)
+        # Test that it raises exception for invalid input
+        with self.assertRaises(Exception):
+            _parse_id_param("invalid")
+
+    def test_parse_string_filters_comprehensive(self):
+        """Test _parse_string_filters comprehensively"""
+        # Test with all string filters
+        args = {
+            "first_name": "John",
+            "last_name": "Doe",
+            "address": "123 Main",
+            "other": "ignore"
+        }
+        result = _parse_string_filters(args)
+        self.assertEqual(result, {
+            "first_name": "John",
+            "last_name": "Doe",
+            "address": "123 Main"
+        })
+        # Test with no string filters
+        result = _parse_string_filters({"other": "ignore"})
+        self.assertEqual(result, {})
+        # Test with empty dict
+        result = _parse_string_filters({})
+        self.assertEqual(result, {})
+
+    def test_customer_collection_get_filtered_customers_sql_exception(self):
+        """Test _get_filtered_customers when SQL filter raises exception"""
+        with app.test_request_context():
+            collection = CustomerCollection()
+            # Create a mock query object that will raise exception
+            mock_query = MagicMock()
+            mock_query.filter.side_effect = BadRequest("Test BadRequest")
+            # Mock Customer.query to return our mock
+            with patch('service.routes.Customer.query', mock_query):
+                # This should re-raise the BadRequest
+                with self.assertRaises(BadRequest):
+                    collection._get_filtered_customers(
+                        filters={"first_name": "John"},
+                        limit=10,
+                        page=1
+                    )
+
+    def test_customer_collection_filter_with_sql_badrequest(self):
+        """Test _filter_with_sql when BadRequest is raised"""
+        with app.test_request_context():
+            collection = CustomerCollection()
+            # Create mock query that raises BadRequest
+            mock_query = MagicMock()
+            mock_query.filter.side_effect = BadRequest("Invalid filter")
+            # This should re-raise the BadRequest
+            with self.assertRaises(BadRequest):
+                collection._filter_with_sql(
+                    filters={"first_name": "John"},
+                    limit=10,
+                    page=1,
+                    query_obj=mock_query
+                )
+
+    def test_customer_collection_filter_with_sql_generic_exception(self):
+        """Test _filter_with_sql when generic exception occurs"""
+        with app.test_request_context():
+            collection = CustomerCollection()
+            # Create mock query that raises generic exception
+            mock_query = MagicMock()
+            mock_query.filter.side_effect = Exception("SQL error")
+            with self.assertRaises(Exception) as context:
+                collection._filter_with_sql(
+                    filters={"first_name": "John"},
+                    limit=10,
+                    page=1,
+                    query_obj=mock_query
+                )
+            self.assertIn("Internal Server Error", str(context.exception))
+
+    def test_customer_collection_filter_with_python_exception(self):
+        """Test _filter_with_python when Customer.all() raises exception"""
+        with app.test_request_context():
+            collection = CustomerCollection()
+            # Mock Customer.all() to raise exception
+            with patch('service.routes.Customer.all', side_effect=Exception("DB error")):
+                with self.assertRaises(Exception) as context:
+                    collection._filter_with_python(
+                        filters={"first_name": "John"},
+                        limit=10,
+                        page=1
+                    )
+                self.assertIn("Internal Server Error", str(context.exception))
+
+    def test_customer_collection_post_deserialize_generic_exception(self):
+        """Test POST when deserialize raises generic exception"""
+        # Create test data
+        customer_data = {
+            "first_name": "Test",
+            "last_name": "User",
+            "address": "123 Main St"
+        }
+        # Mock Customer.deserialize to raise generic exception
+        with patch.object(Customer, 'deserialize', side_effect=Exception("Deserialize error")):
+            resp = self.client.post(BASE_URL, json=customer_data)
+            self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def test_customer_collection_create_customer_db_generic_exception(self):
+        """Test customer creation when create() raises generic exception"""
+        # Create a customer but mock create() to raise exception
+        customer = CustomerFactory()
+        # Mock the Customer constructor and create method
+        with patch('service.routes.Customer') as mock_customer_class:
+            mock_instance = MagicMock()
+            mock_instance.id = None
+            # Set up deserialize to work but create to fail
+
+            def mock_create():
+                raise RuntimeError("Create error")
+            mock_instance.create = mock_create
+            mock_customer_class.return_value = mock_instance
+
+            # Also need to handle deserialize call
+            def mock_deserialize(data):
+                mock_instance.first_name = data.get('first_name', '')
+                mock_instance.last_name = data.get('last_name', '')
+                mock_instance.address = data.get('address', '')
+            mock_instance.deserialize = mock_deserialize
+            resp = self.client.post(BASE_URL, json=customer.serialize())
+            # Should return 500
+            self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def test_customer_resource_apply_updates_generic_exception(self):
+        """Test CustomerResource._apply_updates_to_customer with generic exception"""
+        with app.test_request_context():
+            resource = CustomerResource()
+            customer = MagicMock()
+            # Mock deserialize to raise generic exception
+            customer.deserialize.side_effect = Exception("Deserialize error")
+            customer.serialize.return_value = {}
+            with self.assertRaises(Exception) as context:
+                resource._apply_updates_to_customer(
+                    customer,
+                    {"first_name": "Updated"},
+                    1
+                )
+            self.assertIn("Internal Server Error", str(context.exception))
+
+    def test_customer_resource_delete_data_validation_error(self):
+        """Test delete when DataValidationError is raised"""
+        customer = self._create_customers(1)[0]
+        # Create a mock customer
+        mock_customer = MagicMock()
+        mock_customer.delete.side_effect = DataValidationError("Cannot delete")
+        # Mock Customer.find to return our mock
+        with patch('service.routes.Customer.find', return_value=mock_customer):
+            resp = self.client.delete(f"{BASE_URL}/{customer.id}")
+            self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def test_customer_resource_delete_generic_exception(self):
+        """Test delete when generic exception is raised"""
+        customer = self._create_customers(1)[0]
+        # Create a mock customer
+        mock_customer = MagicMock()
+        mock_customer.delete.side_effect = Exception("Delete error")
+        # Mock Customer.find to return our mock
+        with patch('service.routes.Customer.find', return_value=mock_customer):
+            resp = self.client.delete(f"{BASE_URL}/{customer.id}")
+            self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def test_customer_status_resource_find_customer_exception(self):
+        """Test status update when Customer.find() raises exception"""
+        customer = self._create_customers(1)[0]
+        # Mock Customer.find to raise exception
+        with patch('service.routes.Customer.find', side_effect=Exception("Find error")):
+            resp = self.client.put(
+                f"{BASE_URL}/{customer.id}/status",
+                json={"status": "active"}
+            )
+            self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def test_customer_status_resource_update_status_generic_exception(self):
+        """Test status update when update() raises generic exception"""
+        customer = self._create_customers(1)[0]
+        # We need to mock the customer instance
+        mock_customer = MagicMock()
+        mock_customer.status = "active"
+        mock_customer.update.side_effect = Exception("Update error")
+        # Mock Customer.find to return our mock
+        with patch('service.routes.Customer.find', return_value=mock_customer):
+            resp = self.client.put(
+                f"{BASE_URL}/{customer.id}/status",
+                json={"status": "suspended"}
+            )
+            self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 ######################################################################
 #  T E S T   S A D   P A T H S
 ######################################################################
+
+
 class TestSadPaths(TestCase):
     """Test REST Exception Handling"""
 
