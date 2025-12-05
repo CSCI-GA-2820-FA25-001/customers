@@ -130,7 +130,7 @@ def _error_payload(error_name: str, message: str):
 
 
 # Register JSON error handlers so raising werkzeug exceptions returns the expected body.
-@api.errorhandler(DataValidationError)
+@restx_api.errorhandler(DataValidationError)
 def _handle_data_validation(error):
     """Handle DataValidationError"""
     msg = str(error)
@@ -138,7 +138,7 @@ def _handle_data_validation(error):
     return _error_payload("Bad Request", msg), status.HTTP_400_BAD_REQUEST
 
 
-@api.errorhandler(BadRequest)
+@restx_api.errorhandler(BadRequest)
 def _handle_bad_request(error):
     """Handle BadRequest error"""
     # werkzeug BadRequest may have .description
@@ -146,14 +146,14 @@ def _handle_bad_request(error):
     return _error_payload("Bad Request", msg), status.HTTP_400_BAD_REQUEST
 
 
-@api.errorhandler(NotFound)
+@restx_api.errorhandler(NotFound)
 def _handle_not_found(error):
     """Handle NotFound error"""
     msg = getattr(error, "description", str(error))
     return _error_payload("Not Found", msg), status.HTTP_404_NOT_FOUND
 
 
-@api.errorhandler(InternalServerError)
+@restx_api.errorhandler(InternalServerError)
 def _handle_internal_server(error):
     """Handle InternalServerError"""
     msg = getattr(error, "description", "Internal Server Error")
@@ -161,14 +161,14 @@ def _handle_internal_server(error):
     return _error_payload("Internal Server Error", msg), status.HTTP_500_INTERNAL_SERVER_ERROR
 
 
-@api.errorhandler(MethodNotAllowed)
+@restx_api.errorhandler(MethodNotAllowed)
 def _handle_method_not_allowed(error):
     """Handle MethodNotAllowed error"""
     msg = getattr(error, "description", str(error))
     return _error_payload("Method Not Allowed", msg), status.HTTP_405_METHOD_NOT_ALLOWED
 
 
-@api.errorhandler(UnsupportedMediaType)
+@restx_api.errorhandler(UnsupportedMediaType)
 def _handle_unsupported_media_type(error):
     """Handle UnsupportedMediaType error"""
     msg = getattr(error, "description", str(error))
@@ -327,14 +327,14 @@ def _parse_string_filters(raw_args):
 ######################################################################
 # Customer Collection Resource: GET (list) and POST (create)
 ######################################################################
-@api.route("/customers", strict_slashes=False)
+@restx_api.route("/customers", strict_slashes=False)
 class CustomerCollection(Resource):
     """Handles all interactions with collections of Customers"""
 
-    @api.doc("list_customers")
-    @api.expect(customer_args)
-    @api.marshal_list_with(customer_model)
-    @api.response(400, "Invalid query parameters")
+    @restx_api.doc("list_customers")
+    @restx_api.expect(customer_args)
+    @restx_api.marshal_list_with(customer_model)
+    @restx_api.response(400, "Invalid query parameters")
     def get(self):  # pylint: disable=too-many-branches
         """
         Retrieve a list of Customers
@@ -434,10 +434,10 @@ class CustomerCollection(Resource):
 
         return customers
 
-    @api.doc("create_customer")
-    @api.expect(create_model)
-    @api.marshal_with(customer_model, code=201)
-    @api.response(400, "Invalid input data")
+    @restx_api.doc("create_customer")
+    @restx_api.expect(create_model)
+    @restx_api.marshal_with(customer_model, code=201)
+    @restx_api.response(400, "Invalid input data")
     def post(self):
         """
         Create a new Customer
@@ -457,7 +457,7 @@ class CustomerCollection(Resource):
         self._create_customer_in_db(customer)
 
         app.logger.info("Customer with ID [%s] created", customer.id)
-        location_url = api.url_for(CustomerResource, customer_id=customer.id, _external=False)
+        location_url = restx_api.url_for(CustomerResource, customer_id=customer.id, _external=False)
         return customer.serialize(), status.HTTP_201_CREATED, {"Location": location_url}
 
     def _deserialize_customer(self, customer, data):
@@ -507,8 +507,8 @@ class CustomerCollection(Resource):
 ######################################################################
 
 
-@api.route("/customers/<string:customer_id>")
-@api.param("customer_id", "The Customer identifier")
+@restx_api.route("/customers/<string:customer_id>")
+@restx_api.param("customer_id", "The Customer identifier")
 class CustomerResource(Resource):
     """Handles interactions with a single Customer"""
 
@@ -519,9 +519,9 @@ class CustomerResource(Resource):
             _raise_http(400, "customer id must be an integer")
         return int(customer_id)
 
-    @api.doc("get_customer")
-    @api.marshal_with(customer_model)
-    @api.response(404, "Customer not found")
+    @restx_api.doc("get_customer")
+    @restx_api.marshal_with(customer_model)
+    @restx_api.response(404, "Customer not found")
     def get(self, customer_id):
         """Get a customer by ID"""
         customer_id = self._validate_customer_id(customer_id)
@@ -539,11 +539,11 @@ class CustomerResource(Resource):
         app.logger.info("Returning customer: %s", customer.first_name)
         return customer.serialize(), status.HTTP_200_OK
 
-    @api.doc("update_customer")
-    @api.expect(create_model)
-    @api.marshal_with(customer_model)
-    @api.response(404, "Customer not found")
-    @api.response(400, "Invalid input data")
+    @restx_api.doc("update_customer")
+    @restx_api.expect(create_model)
+    @restx_api.marshal_with(customer_model)
+    @restx_api.response(404, "Customer not found")
+    @restx_api.response(400, "Invalid input data")
     def put(self, customer_id):
         """Update a customer"""
         customer_id = self._validate_customer_id(customer_id)
@@ -665,8 +665,8 @@ class CustomerResource(Resource):
         except ValueError:  # pragma: no cover
             customer.deserialize(data)  # pylint: disable=no-value-for-parameter
 
-    @api.doc("delete_customer")
-    @api.response(204, "Customer deleted")
+    @restx_api.doc("delete_customer")
+    @restx_api.response(204, "Customer deleted")
     def delete(self, customer_id):
         """Delete a customer"""
         customer_id = self._validate_customer_id(customer_id)
@@ -693,8 +693,8 @@ class CustomerResource(Resource):
 ######################################################################
 # Customer Status Resource: PUT to update status
 ######################################################################
-@api.route("/customers/<string:customer_id>/status")
-@api.param("customer_id", "The Customer identifier")
+@restx_api.route("/customers/<string:customer_id>/status")
+@restx_api.param("customer_id", "The Customer identifier")
 class CustomerStatusResource(Resource):
     """Handles customer status updates"""
 
@@ -705,11 +705,11 @@ class CustomerStatusResource(Resource):
             _raise_http(400, "customer id must be an integer")
         return int(customer_id)
 
-    @api.doc("update_customer_status")
-    @api.expect(status_model)
-    @api.marshal_with(customer_model)
-    @api.response(404, "Customer not found")
-    @api.response(400, "Invalid status value")
+    @restx_api.doc("update_customer_status")
+    @restx_api.expect(status_model)
+    @restx_api.marshal_with(customer_model)
+    @restx_api.response(404, "Customer not found")
+    @restx_api.response(400, "Invalid status value")
     def put(self, customer_id):
         """Update customer status"""
         customer_id = self._validate_customer_id(customer_id)
