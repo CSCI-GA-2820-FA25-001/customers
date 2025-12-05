@@ -42,11 +42,22 @@ api = Api(
     app,
     version="v1.0.0",
     title="Customers REST API Service",
-    description="Service managing customer accounts for the eCommerce site",
+    description="""Service managing customer accounts for the eCommerce site.
+    **Key Features:**
+    - Create, read, update, and delete customer records
+    - Filter and search customers
+    - Update customer status (active, suspended, deactivated)
+    - Pagination support
+    **Authentication:** This API currently does not require authentication.
+    """,
     default="customers",
     default_label="Customer operations",
     doc="/apidocs/",
     prefix="/api",
+    contact="Support Team",
+    contact_email="support@example.com",
+    license="Apache 2.0",
+    license_url="https://www.apache.org/licenses/LICENSE-2.0"
 )
 
 
@@ -55,11 +66,23 @@ api = Api(
 ######################################################################
 
 create_model = api.model(
-    "Customer",
+    "CustomerCreate",
     {
-        "first_name": fields.String(required=True, description="Customer first name"),
-        "last_name": fields.String(required=True, description="Customer last name"),
-        "address": fields.String(required=True, description="Customer address"),
+        "first_name": fields.String(
+            required=True,
+            description="Customer first name",
+            example="John"
+        ),
+        "last_name": fields.String(
+            required=True,
+            description="Customer last name",
+            example="Doe"
+        ),
+        "address": fields.String(
+            required=True,
+            description="Customer address",
+            example="123 Main St, Anytown, USA"
+        ),
     },
 )
 
@@ -67,9 +90,16 @@ customer_model = api.inherit(
     "CustomerResponse",
     create_model,
     {
-        "id": fields.Integer(readOnly=True, description="Unique customer identifier"),
+        "id": fields.Integer(
+            readOnly=True,
+            description="Unique customer identifier",
+            example=12345
+        ),
         "status": fields.String(
-            readOnly=True, description="Customer status", enum=list(ALLOWED_STATUSES)
+            readOnly=True,
+            description="Customer account status",
+            enum=list(ALLOWED_STATUSES),
+            example="active"
         ),
     },
 )
@@ -78,7 +108,10 @@ status_model = api.model(
     "StatusUpdate",
     {
         "status": fields.String(
-            required=True, description="New customer status", enum=list(ALLOWED_STATUSES)
+            required=True,
+            description="New customer status",
+            enum=list(ALLOWED_STATUSES),
+            example="active"
         )
     },
 )
@@ -87,12 +120,48 @@ status_model = api.model(
 # Query String Arguments Parser (for docs)
 ######################################################################
 customer_args = reqparse.RequestParser()
-customer_args.add_argument("first_name", type=str, location="args", required=False, help="Filter by first name")
-customer_args.add_argument("last_name", type=str, location="args", required=False, help="Filter by last name")
-customer_args.add_argument("address", type=str, location="args", required=False, help="Filter by address")
-customer_args.add_argument("id", type=int, location="args", required=False, help="Filter by customer ID")
-customer_args.add_argument("limit", type=int, location="args", required=False, help="Number of results per page")
-customer_args.add_argument("page", type=int, location="args", required=False, help="Page number (starts at 1)")
+customer_args.add_argument(
+    "first_name",
+    type=str,
+    location="args",
+    required=False,
+    help="Filter customers by first name (case-insensitive partial match)"
+)
+customer_args.add_argument(
+    "last_name",
+    type=str,
+    location="args",
+    required=False,
+    help="Filter customers by last name (case-insensitive partial match)"
+)
+customer_args.add_argument(
+    "address",
+    type=str,
+    location="args",
+    required=False,
+    help="Filter customers by address (case-insensitive partial match)"
+)
+customer_args.add_argument(
+    "id",
+    type=int,
+    location="args",
+    required=False,
+    help="Filter by exact customer ID"
+)
+customer_args.add_argument(
+    "limit",
+    type=int,
+    location="args",
+    required=False,
+    help="Maximum number of results to return per page (positive integer)"
+)
+customer_args.add_argument(
+    "page",
+    type=int,
+    location="args",
+    required=False,
+    help="Page number for pagination (1-indexed)"
+)
 
 
 ######################################################################
@@ -102,8 +171,9 @@ def _error_payload(error_name: str, message: str):
     """Create standardized error response payload"""
     return {"error": error_name, "message": message}
 
-
 # Register JSON error handlers so raising werkzeug exceptions returns the expected body.
+
+
 @api.errorhandler(DataValidationError)
 def _handle_data_validation(error):
     """Handle DataValidationError"""
@@ -149,10 +219,6 @@ def _handle_unsupported_media_type(error):
     return _error_payload("Unsupported Media Type", msg), status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
 
 
-######################################################################
-# Small helper to raise appropriate werkzeug exceptions with messages
-# (Prefer raising exceptions rather than api.abort so our handlers run)
-######################################################################
 def _raise_http(code: int, message: str):
     """Raise appropriate HTTP exception based on code"""
     if code == 400:
@@ -167,9 +233,6 @@ def _raise_http(code: int, message: str):
     raise InternalServerError(message)
 
 
-######################################################################
-# Index & Health (outside namespace for compatibility with tests)
-######################################################################
 @app.route("/")
 def index():
     """Render the admin UI"""
@@ -186,6 +249,7 @@ def api_info():
                 "version": "v1.0.0",
                 "description": "Service managing customer accounts for the eCommerce site",
                 "list_url": "/api/customers",
+                "documentation": "/apidocs/",
             }
         ),
         status.HTTP_200_OK,
@@ -193,19 +257,22 @@ def api_info():
 
 
 @api.route("/health")
+@api.doc(tags=["System"])
 class HealthResource(Resource):
     """Health check endpoint"""
 
-    @api.doc("health_check")
+    @api.doc(
+        "health_check",
+        summary="Check service health",
+        description="Health check endpoint for Kubernetes and monitoring systems",
+        operationId="healthCheck"
+    )
     @api.response(200, "Service is healthy")
     def get(self):
         """Health check endpoint for Kubernetes"""
         return {"status": "OK"}, status.HTTP_200_OK
 
 
-######################################################################
-# Helper: parse and validate query params (tests expect strict messages)
-######################################################################
 def _parse_and_validate_query_args(raw_args):  # pylint: disable=too-many-branches
     """Parse and validate query parameters"""
     allowed = {"first_name", "last_name", "address", "id", "limit", "page"}
@@ -279,17 +346,38 @@ def _parse_string_filters(raw_args):
     return filters
 
 
-######################################################################
-# Customer Collection Resource: GET (list) and POST (create)
-######################################################################
 @api.route("/customers", strict_slashes=False)
+@api.doc(tags=["Customer Operations"])
 class CustomerCollection(Resource):
     """Handles all interactions with collections of Customers"""
 
-    @api.doc("list_customers")
+    @api.doc(
+        "list_customers",
+        summary="List and filter customers",
+        description="""Retrieve customers with optional filtering and pagination.
+
+        **Filtering Options:**
+        - `first_name`: Partial match (case-insensitive)
+        - `last_name`: Partial match (case-insensitive)
+        - `address`: Partial match (case-insensitive)
+        - `id`: Exact match
+
+        **Pagination:**
+        - `limit`: Number of results per page
+        - `page`: Page number (1-indexed)
+
+        **Examples:**
+        - `GET /customers` - Get all customers
+        - `GET /customers?first_name=john` - Customers with 'john' in first name
+        - `GET /customers?limit=10&page=2` - Second page of 10 customers
+        """,
+        operationId="listCustomers"
+    )
     @api.expect(customer_args)
     @api.marshal_list_with(customer_model)
+    @api.response(200, "Successfully retrieved customers")
     @api.response(400, "Invalid query parameters")
+    @api.response(500, "Internal server error")
     def get(self):  # pylint: disable=too-many-branches
         """
         Retrieve a list of Customers
@@ -389,10 +477,28 @@ class CustomerCollection(Resource):
 
         return customers
 
-    @api.doc("create_customer")
+    @api.doc(
+        "create_customer",
+        summary="Create a new customer",
+        description="""Create a new customer account.
+        **Required Fields:**
+        - `first_name`: Customer's first name
+        - `last_name`: Customer's last name
+        - `address`: Customer's address
+        **Response Includes:**
+        - Auto-generated `id`
+        - Default `status` set to 'active'
+        - `Location` header with URL to the new customer
+        **Note:** Content-Type must be application/json
+        """,
+        operationId="createCustomer"
+    )
     @api.expect(create_model)
     @api.marshal_with(customer_model, code=201)
+    @api.response(201, "Customer successfully created")
     @api.response(400, "Invalid input data")
+    @api.response(415, "Content-Type must be application/json")
+    @api.response(500, "Internal server error")
     def post(self):
         """
         Create a new Customer
@@ -464,6 +570,7 @@ class CustomerCollection(Resource):
 
 @api.route("/customers/<string:customer_id>")
 @api.param("customer_id", "The Customer identifier")
+@api.doc(tags=["Customer Operations"])
 class CustomerResource(Resource):
     """Handles interactions with a single Customer"""
 
@@ -474,9 +581,17 @@ class CustomerResource(Resource):
             _raise_http(400, "customer id must be an integer")
         return int(customer_id)
 
-    @api.doc("get_customer")
+    @api.doc(
+        "get_customer",
+        summary="Get a customer by ID",
+        description="Retrieve a specific customer by their unique identifier.",
+        operationId="getCustomer"
+    )
     @api.marshal_with(customer_model)
+    @api.response(200, "Customer found")
+    @api.response(400, "Invalid customer ID format")
     @api.response(404, "Customer not found")
+    @api.response(500, "Internal server error")
     def get(self, customer_id):
         """Get a customer by ID"""
         customer_id = self._validate_customer_id(customer_id)
@@ -494,11 +609,29 @@ class CustomerResource(Resource):
         app.logger.info("Returning customer: %s", customer.first_name)
         return customer.serialize(), status.HTTP_200_OK
 
-    @api.doc("update_customer")
+    @api.doc(
+        "update_customer",
+        summary="Update a customer",
+        description="""Update an existing customer's information.
+        **Allowed Fields to Update:**
+        - `first_name`: Customer's first name
+        - `last_name`: Customer's last name
+        - `address`: Customer's address
+        **Restrictions:**
+        - `id` field cannot be updated
+        - Fields cannot be set to empty strings
+        - Status must be updated via the `/status` endpoint
+        **Note:** Content-Type must be application/json
+        """,
+        operationId="updateCustomer"
+    )
     @api.expect(create_model)
     @api.marshal_with(customer_model)
-    @api.response(404, "Customer not found")
+    @api.response(200, "Customer successfully updated")
     @api.response(400, "Invalid input data")
+    @api.response(404, "Customer not found")
+    @api.response(415, "Content-Type must be application/json")
+    @api.response(500, "Internal server error")
     def put(self, customer_id):
         """Update a customer"""
         customer_id = self._validate_customer_id(customer_id)
@@ -620,8 +753,16 @@ class CustomerResource(Resource):
         except ValueError:  # pragma: no cover
             customer.deserialize(data)  # pylint: disable=no-value-for-parameter
 
-    @api.doc("delete_customer")
+    @api.doc(
+        "delete_customer",
+        summary="Delete a customer",
+        description="Permanently delete a customer record by ID.",
+        operationId="deleteCustomer"
+    )
     @api.response(204, "Customer deleted")
+    @api.response(400, "Invalid customer ID format")
+    @api.response(404, "Customer not found (silently ignored)")
+    @api.response(500, "Internal server error")
     def delete(self, customer_id):
         """Delete a customer"""
         customer_id = self._validate_customer_id(customer_id)
@@ -650,6 +791,7 @@ class CustomerResource(Resource):
 ######################################################################
 @api.route("/customers/<string:customer_id>/status")
 @api.param("customer_id", "The Customer identifier")
+@api.doc(tags=["Customer Operations"])
 class CustomerStatusResource(Resource):
     """Handles customer status updates"""
 
@@ -660,11 +802,25 @@ class CustomerStatusResource(Resource):
             _raise_http(400, "customer id must be an integer")
         return int(customer_id)
 
-    @api.doc("update_customer_status")
+    @api.doc(
+        "update_customer_status",
+        summary="Update customer status",
+        description="""Update a customer's account status.
+        **Allowed Status Values:**
+        - `active`: Customer account is active
+        - `suspended`: Customer account is temporarily suspended
+        - `deactivated`: Customer account is permanently deactivated
+        **Note:** Content-Type must be application/json
+        """,
+        operationId="updateCustomerStatus"
+    )
     @api.expect(status_model)
     @api.marshal_with(customer_model)
-    @api.response(404, "Customer not found")
+    @api.response(200, "Customer status successfully updated")
     @api.response(400, "Invalid status value")
+    @api.response(404, "Customer not found")
+    @api.response(415, "Content-Type must be application/json")
+    @api.response(500, "Internal server error")
     def put(self, customer_id):
         """Update customer status"""
         customer_id = self._validate_customer_id(customer_id)
