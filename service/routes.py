@@ -761,20 +761,19 @@ class CustomerStatusResource(Resource):
         if not customer:
             _raise_http(404, "customer not found")
 
-    try:
-        if customer.status != new_status:
-            customer.set_status(new_status)
-            customer.update()
-        app.logger.info(
-            "Status set for customer %s -> '%s'", customer_id, customer.status
-        )
-        return jsonify(customer.serialize()), status.HTTP_200_OK
-    except DataValidationError as e:
-        app.logger.error("Validation error setting status for %s: %s", customer_id, e)
-        raise BadRequest(str(e)) from e
-    except Exception as err:  # pragma: no cover - unexpected guard
-        app.logger.exception("Unexpected error setting status for %s", customer_id)
-        raise InternalServerError(str(err)) from err
+    def _update_status_if_changed(self, customer, new_status, customer_id):
+        """Update customer status if it has changed"""
+        try:
+            if customer.status != new_status:
+                customer.set_status(new_status)
+                customer.update()
+        except DataValidationError as e:
+            app.logger.error("Validation error setting status for %s: %s", customer_id, e)
+            _raise_http(400, str(e))
+        except Exception as err:  # pragma: no cover
+            app.logger.exception("Unexpected error setting status for %s", customer_id)
+            _raise_http(500, "Internal Server Error")
+
 
 
 ######################################################################
