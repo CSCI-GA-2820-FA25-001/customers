@@ -1,12 +1,10 @@
-apiVersion: tekton.dev/v1beta1
+apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
   name: cd-pipeline
 spec:
   workspaces:
     - name: pipeline-workspace
-      description: Shared workspace for all tasks
-
   params:
     - name: git-url
       type: string
@@ -17,7 +15,6 @@ spec:
       type: string
     - name: app-name
       type: string
-
   tasks:
     - name: clone
       taskRef:
@@ -30,7 +27,7 @@ spec:
       workspaces:
         - name: output
           workspace: pipeline-workspace
-
+    
     - name: lint
       taskRef:
         name: lint
@@ -38,10 +35,7 @@ spec:
       workspaces:
         - name: source
           workspace: pipeline-workspace
-      params:
-        - name: path
-          value: service
-
+    
     - name: test
       taskRef:
         name: tests
@@ -49,36 +43,29 @@ spec:
       workspaces:
         - name: source
           workspace: pipeline-workspace
-
-    - name: build
-      taskRef:
-        name: build
-      runAfter: [lint, test]
-      params:
-        - name: IMAGE
-          value: $(params.image-name)
-      workspaces:
-        - name: source
-          workspace: pipeline-workspace
-
+    
+    # Skip build for now - no privileged access
+    
     - name: deploy
       taskRef:
-        name: deploy
-      runAfter: [build]
+        name: deploy-image
+      runAfter: [lint, test]
       params:
-        - name: IMAGE
+        - name: image-name
           value: $(params.image-name)
+        - name: manifest-dir
+          value: k8s
       workspaces:
         - name: source
           workspace: pipeline-workspace
-
+    
     - name: bdd-test
       taskRef:
         name: behave
       runAfter: [deploy]
       params:
         - name: base-url
-          value: $(params.app-name)
+          value: http://$(params.app-name):8080
       workspaces:
         - name: source
           workspace: pipeline-workspace
