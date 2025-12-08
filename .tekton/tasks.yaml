@@ -27,6 +27,10 @@ spec:
   steps:
     - name: clone
       image: alpine/git
+      securityContext:
+        runAsUser: 1000   # arbitrary non-root UID
+        runAsGroup: 1000
+        allowPrivilegeEscalation: false
       script: |
         cd $(workspaces.pipeline-workspace.path)
         rm -rf repo || true
@@ -170,6 +174,10 @@ spec:
   steps:
     - name: behave
       image: quay.io/rofrano/pipeline-selenium
+      securityContext:
+        runAsUser: 1000   # arbitrary non-root UID
+        runAsGroup: 1000
+        allowPrivilegeEscalation: false
       workingDir: $(workspaces.source.path)/repo
       env:
        - name: BASE_URL
