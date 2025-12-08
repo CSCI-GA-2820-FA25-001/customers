@@ -23,12 +23,12 @@ spec:
     - name: revision
       default: main
   workspaces:
-    - name: output
+    - name: pipeline-workspace
   steps:
     - name: clone
       image: alpine/git
       script: |
-        cd $(workspaces.output.path)
+        cd $(workspaces.pipeline-workspace.path)
         rm -rf repo || true
         git clone $(params.url) repo
         cd repo

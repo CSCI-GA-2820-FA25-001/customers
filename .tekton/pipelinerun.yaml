@@ -1,0 +1,22 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: cd-pipeline-customers-run
+spec:
+  pipelineRef:
+    name: cd-pipeline-customers
+  workspaces:
+    - name: pipeline-workspace
+      persistentVolumeClaim:
+        claimName: pipeline-workspace   # reference your PVC
+  params:
+    - name: git-url
+      value: "https://github.com/CSCI-GA-2820-FA25-001/customers"
+    - name: git-ref
+      value: "master"
+    - name: image-name
+      value: "image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/customers:$(tt.params.git-ref)"
+    - name: app-name
+      value: "customers"
+    - name: base-url
+      value: "http://customers:8080"
