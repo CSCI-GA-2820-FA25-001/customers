@@ -20,14 +20,18 @@ metadata:
 spec:
   params:
     - name: url
+      type: string
     - name: revision
+      type: string
       default: main
   workspaces:
     - name: output
   steps:
     - name: clone
-      image: alpine/git
+      image: alpine/git:latest
       script: |
+        set -e
+        apk add --no-cache ca-certificates
         cd $(workspaces.output.path)
         rm -rf repo || true
         git clone $(params.url) repo
@@ -41,21 +45,27 @@ metadata:
   name: lint
 spec:
   params:
-      - name: path
-        default: service
+    - name: path
+      type: string
+      default: service
   workspaces:
     - name: source
   steps:
     - name: run-lint
-      image: python:3.10
+      image: python:3.11
       script: |
+        set -e
         cd $(workspaces.source.path)/repo
-        # Install everything first
-        pip install flake8 pylint pipenv flask-restx
+
+        echo "Installing development dependencies (pipenv)…"
+        pip install --upgrade pip pipenv
         pipenv install --dev --system
-        # Then run lint checks
-        flake8 $(params.path) tests || exit 1
-        pylint $(params.path) tests || exit 1
+
+        echo "Running flake8…"
+        flake8 $(params.path) tests
+
+        echo "Running pylint…"
+        pylint $(params.path) tests
 
 ---
 apiVersion: tekton.dev/v1
@@ -72,99 +82,123 @@ spec:
         - name: DATABASE_URI
           value: "sqlite:///$(workspaces.source.path)/test.db"
       script: |
+        set -e
         cd $(workspaces.source.path)/repo
-        pip install pipenv flask-restx
+
+        echo "Installing dependencies..."
+        pip install --upgrade pip pipenv
         pipenv install --dev --system
+
+        echo "Running pytest…"
         pytest --pspec
+
+---
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: buildah
+spec:
+  params:
+    - name: IMAGE
+      type: string
+      description: Fully qualified image name to build
+    - name: DOCKERFILE
+      type: string
+      default: "Dockerfile"
+    - name: CONTEXT
+      type: string
+      default: "."
+  workspaces:
+    - name: source
+  steps:
+    - name: build-and-push
+      image: quay.io/containers/buildah:latest
+      env:
+        - name: STORAGE_DRIVER
+          value: "vfs"
+        - name: ISOLATION
+          value: "chroot"
+      workingDir: $(workspaces.source.path)/repo
+      script: |
+        #!/bin/bash
+        set -e
+
+        echo "=== Buildah Task ==="
+        echo "Image: $(params.IMAGE)"
+        echo "Dockerfile: $(params.DOCKERFILE)"
+        echo "Context: $(params.CONTEXT)"
+        echo "Environment STORAGE_DRIVER=$STORAGE_DRIVER"
+        echo "Environment ISOLATION=$ISOLATION"
+        echo "===================="
+
+        buildah info
+
+        echo "=== Building Image ==="
+        buildah bud \
+          --file "$(params.DOCKERFILE)" \
+          --tag "$(params.IMAGE)" \
+          "$(params.CONTEXT)"
+
+        echo "=== Pushing Image ==="
+        buildah push "$(params.IMAGE)"
+
 
 ---
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
   name: deploy-image
-  labels:
-    app.kubernetes.io/version: "0.1"
-  annotations:
-    tekton.dev/categories: Deployment
-    tekton.dev/pipelines.minVersion: "0.17.0"
-    tekton.dev/tags: openshift, deploy
-    tekton.dev/displayName: "deploy image"
-    tekton.dev/platforms: "linux/amd64"
 spec:
   workspaces:
-  - name: source  
-  description: >-
-    This task will update the deployment.yaml with the latest image name
-    and then apply that yaml file and it's service file.
+    - name: source
   params:
-  - name: image-name
-    description: The fully qualified name of the new image to deploy
-    type: string
-  - name: manifest-dir
-    description: The directory in source that contains yaml manifests
-    type: string
-    default: "k8s"
+    - name: IMAGE_NAME
+      type: string
+    - name: manifest-dir
+      type: string
+      default: "k8s"
   steps:
     - name: deploy
       image: quay.io/openshift/origin-cli:latest
       workingDir: /workspace/source/repo
-      command: ["/bin/bash", "-c"]
+      command:
+        - /bin/bash
+        - -c
       args:
-        - |-
-          #!/bin/bash
+        - |
           set -e
 
-          echo "**********************************************************************"
-          echo "Installing YQ..."
-          echo "**********************************************************************"
+          echo "*** Installing yq ***"
           wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           chmod a+x /usr/bin/yq
 
-          echo "*********************  DEPLOYMENT  ***********************"
-          echo "Deploying $(params.image-name) ..."
+          echo "*** Updating deployment YAML with image $(params.IMAGE_NAME) ***"
+          yq -i '.spec.template.spec.containers[0].image = "$(params.IMAGE_NAME)"' \
+             $(params.manifest-dir)/deployment.yaml
 
-          yq -e -i '.spec.template.spec.containers[0].image="$(params.image-name)"' $(params.manifest-dir)/deployment.yaml
-          cat $(params.manifest-dir)/deployment.yaml
-
-          echo "************************************************************"
-          echo "OC APPLY..."
+          echo "*** Applying manifests ***"
           oc apply -f $(params.manifest-dir)/deployment.yaml
           oc apply -f $(params.manifest-dir)/service.yaml
 
-          echo "************************************************************"
-          sleep 3
-          echo "Pods:"
+          echo "*** Current Pods ***"
           oc get pods
-          echo ""
 
 ---
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
   name: behave
-  labels:
-    app.kubernetes.io/version: "0.1"
-  annotations:
-    tekton.dev/categories: Testing
-    tekton.dev/pipelines.minVersion: "0.17.0"
-    tekton.dev/tags: python, bdd, behave
-    tekton.dev/displayName: "bdd tests"
-    tekton.dev/platforms: "linux/amd64"
 spec:
   workspaces:
     - name: source
-  description: >-
-    This task can be used to perform bdd tests with behave.
   params:
     - name: base-url
-      description: The url of the application to test
       type: string
     - name: wait-seconds
-      description: The number of seconds to wait for a reply
       type: string
       default: "60"
     - name: driver
-      description: The web driver to use (chrome or firefox)
       type: string
       default: "chrome"
   steps:
@@ -172,27 +206,31 @@ spec:
       image: quay.io/rofrano/pipeline-selenium
       workingDir: $(workspaces.source.path)/repo
       env:
-       - name: BASE_URL
-         value: $(params.base-url)
-       - name: WAIT_SECONDS
-         value: $(params.wait-seconds)
-       - name: DRIVER
-         value: $(params.driver)
+        - name: BASE_URL
+          value: $(params.base-url)
+        - name: WAIT_SECONDS
+          value: $(params.wait-seconds)
+        - name: DRIVER
+          value: $(params.driver)
       script: |
         #!/bin/bash
         set -e
         export PATH=$PATH:$HOME/.local/bin
 
-        echo "***** Installing dependencies *****"
+        echo "*** Preparing Python environment ***"
+        pip install --upgrade pip
         if [ -e "Pipfile" ]; then
-          echo "Found Pipfile: using pipenv"
-          python -m pip install --upgrade pip pipenv
+          pip install pipenv
           pipenv requirements --dev > requirements.txt
-        elif [ ! -e "requirements.txt" ]; then
-          echo "No requirements file found"
+        fi
+
+        if [ ! -e "requirements.txt" ]; then
+          echo "ERROR: No requirements.txt found"
           exit 1
         fi
-        python -m pip install --user -r requirements.txt
 
-        echo "***** Running BDD Tests *****"
+        echo "*** Installing test dependencies ***"
+        pip install --user -r requirements.txt behave selenium
+
+        echo "*** Running behave BDD tests ***"
         behave

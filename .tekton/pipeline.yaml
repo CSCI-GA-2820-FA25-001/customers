@@ -1,71 +1,176 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"tekton.dev/v1","kind":"Pipeline","metadata":{"annotations":{},"name":"cd-pipeline","namespace":"mfrieri-dev"},"spec":{"params":[{"name":"git-url","type":"string"},{"default":"master","name":"git-ref","type":"string"},{"name":"image-name","type":"string"},{"name":"app-name","type":"string"}],"tasks":[{"name":"clone","params":[{"name":"url","value":"$(params.git-url)"},{"name":"revision","value":"$(params.git-ref)"}],"taskRef":{"name":"checkout"},"workspaces":[{"name":"output","workspace":"pipeline-workspace"}]},{"name":"lint","runAfter":["clone"],"taskRef":{"name":"lint"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]},{"name":"test","runAfter":["clone"],"taskRef":{"name":"tests"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]},{"name":"deploy","params":[{"name":"image-name","value":"$(params.image-name)"},{"name":"manifest-dir","value":"k8s"}],"runAfter":["lint","test"],"taskRef":{"name":"deploy-image"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]},{"name":"bdd-test","params":[{"name":"base-url","value":"http://$(params.app-name):8080"}],"runAfter":["deploy"],"taskRef":{"name":"behave"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]}],"workspaces":[{"name":"pipeline-workspace"}]}}
+  creationTimestamp: '2025-12-05T02:23:14Z'
+  generation: 26
+  managedFields:
+    - apiVersion: tekton.dev/v1beta1
+      fieldsType: FieldsV1
+      fieldsV1:
+        'f:spec': {}
+      manager: kubectl-create
+      operation: Update
+      time: '2025-12-05T02:23:14Z'
+    - apiVersion: tekton.dev/v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        'f:metadata':
+          'f:annotations':
+            .: {}
+            'f:kubectl.kubernetes.io/last-applied-configuration': {}
+      manager: kubectl-client-side-apply
+      operation: Update
+      time: '2025-12-08T05:08:55Z'
+    - apiVersion: tekton.dev/v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        'f:spec':
+          'f:finally': {}
+          'f:params': {}
+          'f:tasks': {}
+          'f:workspaces': {}
+      manager: Mozilla
+      operation: Update
+      time: '2025-12-08T14:23:41Z'
   name: cd-pipeline
+  namespace: mfrieri-dev
+  resourceVersion: '5352277101'
+  uid: a6bb44cf-1452-45d1-b2a2-a079c4216427
 spec:
-  workspaces:
-    - name: pipeline-workspace
   params:
-    - name: git-url
+    - name: GIT_URL
       type: string
-    - name: git-ref
+    - default: master
+      name: GIT_REF
       type: string
-      default: master
-    - name: image-name
+    - default: 'image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/ $(params.APP_NAME):latest'
+      name: IMAGE_NAME
       type: string
-    - name: app-name
+    - default: customers-service
+      name: APP_NAME
       type: string
   tasks:
-    - name: clone
-      taskRef:
-        name: checkout
+    - name: git-clone
       params:
-        - name: url
-          value: $(params.git-url)
-        - name: revision
-          value: $(params.git-ref)
+        - name: CRT_FILENAME
+          value: ca-bundle.crt
+        - name: HTTP_PROXY
+          value: ''
+        - name: HTTPS_PROXY
+          value: ''
+        - name: NO_PROXY
+          value: ''
+        - name: SUBDIRECTORY
+          value: ''
+        - name: USER_HOME
+          value: /home/git
+        - name: DELETE_EXISTING
+          value: 'true'
+        - name: VERBOSE
+          value: 'false'
+        - name: SSL_VERIFY
+          value: 'true'
+        - name: URL
+          value: $(params.GIT_URL)
+        - name: REVISION
+          value: $(params.GIT_REF)
+        - name: REFSPEC
+          value: ''
+        - name: SUBMODULES
+          value: 'true'
+        - name: DEPTH
+          value: '1'
+        - name: SPARSE_CHECKOUT_DIRECTORIES
+          value: ''
+      taskRef:
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-clone
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
       workspaces:
         - name: output
           workspace: pipeline-workspace
-    
-    - name: lint
+    - name: pylint
+      params:
+        - name: image
+          value: 'quay.io/rofrano/python:3.11-slim'
+        - name: path
+          value: service
+        - name: args
+          value:
+            - '--fail-under=9.0'
+      runAfter:
+        - git-clone
       taskRef:
-        name: lint
-      runAfter: [clone]
+        kind: Task
+        name: pylint
       workspaces:
         - name: source
           workspace: pipeline-workspace
-    
-    - name: test
+    - name: pytest-env
+      params:
+        - name: pytest-args
+          value:
+            - '--pspec'
+        - name: secret-name
+          value: postgres-creds
+        - name: secret-key
+          value: database_uri
+      runAfter:
+        - git-clone
       taskRef:
-        name: tests
-      runAfter: [clone]
+        kind: Task
+        name: pytest-env
       workspaces:
         - name: source
           workspace: pipeline-workspace
-    
-    # Skip build for now - no privileged access
-    
-    - name: deploy
+    - name: buildah
+      params:
+        - name: IMAGE
+          value: |-
+            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/
+            $(params.APP_NAME):latest
+        - name: DOCKERFILE
+          value: Dockerfile
+        - name: CONTEXT
+          value: .
+        - name: BUILDAH_FLAGS
+          value: '--storage-driver=vfs --isolation=chroot'
+      runAfter:
+        - pylint
+        - pytest-env
       taskRef:
-        name: deploy-image
-      runAfter: [lint, test]
+        kind: Task
+        name: buildah
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+    - name: deploy-image
       params:
         - name: image-name
-          value: $(params.image-name)
+          value: |-
+            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/
+            $(params.APP_NAME):latest
         - name: manifest-dir
           value: k8s
-      workspaces:
-        - name: source
-          workspace: pipeline-workspace
-    
-    - name: bdd-test
+        - name: IMAGE_NAME
+          value: |-
+            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/
+            $(params.APP_NAME):latest
+      runAfter:
+        - buildah
       taskRef:
-        name: behave
-      runAfter: [deploy]
-      params:
-        - name: base-url
-          value: http://$(params.app-name):8080
+        kind: Task
+        name: deploy-image
       workspaces:
         - name: source
           workspace: pipeline-workspace
+  workspaces:
+    - name: pipeline-workspace
