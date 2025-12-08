@@ -17,41 +17,42 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:16
+          # Software Collections image - OpenShift compatible, non-root
+          image: quay.io/sclorg/postgresql-15-c9s:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: pg
               containerPort: 5432
           env:
-            - name: POSTGRES_DB
+            - name: POSTGRESQL_DATABASE
               value: "customers"
-            - name: POSTGRES_USER
+            - name: POSTGRESQL_USER
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
                   key: POSTGRES_USER
-            - name: POSTGRES_PASSWORD
+            - name: POSTGRESQL_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
                   key: POSTGRES_PASSWORD
           volumeMounts:
             - name: data
-              mountPath: /var/lib/postgresql/data
-            - name: init-sql
-              mountPath: /docker-entrypoint-initdb.d
-              readOnly: true
+              mountPath: /var/lib/pgsql/data
           readinessProbe:
             exec:
-              command: ["pg_isready","-U","postgres","-d","customers"]
-            initialDelaySeconds: 10
+              command:
+                - /usr/libexec/check-container
+            initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 6
           livenessProbe:
             exec:
-              command: ["pg_isready","-U","postgres","-d","customers"]
-            initialDelaySeconds: 20
+              command:
+                - /usr/libexec/check-container
+                - --live
+            initialDelaySeconds: 120
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 6
@@ -59,9 +60,3 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: postgres-data
-        - name: init-sql
-          configMap:
-            name: postgres-init
-            items:
-              - key: 01-init.sql
-                path: 01-init.sql
