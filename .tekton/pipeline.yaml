@@ -1,44 +1,7 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  annotations:
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"tekton.dev/v1","kind":"Pipeline","metadata":{"annotations":{},"name":"cd-pipeline","namespace":"mfrieri-dev"},"spec":{"params":[{"name":"git-url","type":"string"},{"default":"master","name":"git-ref","type":"string"},{"name":"image-name","type":"string"},{"name":"app-name","type":"string"}],"tasks":[{"name":"clone","params":[{"name":"url","value":"$(params.git-url)"},{"name":"revision","value":"$(params.git-ref)"}],"taskRef":{"name":"checkout"},"workspaces":[{"name":"output","workspace":"pipeline-workspace"}]},{"name":"lint","runAfter":["clone"],"taskRef":{"name":"lint"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]},{"name":"test","runAfter":["clone"],"taskRef":{"name":"tests"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]},{"name":"deploy","params":[{"name":"image-name","value":"$(params.image-name)"},{"name":"manifest-dir","value":"k8s"}],"runAfter":["lint","test"],"taskRef":{"name":"deploy-image"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]},{"name":"bdd-test","params":[{"name":"base-url","value":"http://$(params.app-name):8080"}],"runAfter":["deploy"],"taskRef":{"name":"behave"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]}],"workspaces":[{"name":"pipeline-workspace"}]}}
-  creationTimestamp: '2025-12-05T02:23:14Z'
-  generation: 26
-  managedFields:
-    - apiVersion: tekton.dev/v1beta1
-      fieldsType: FieldsV1
-      fieldsV1:
-        'f:spec': {}
-      manager: kubectl-create
-      operation: Update
-      time: '2025-12-05T02:23:14Z'
-    - apiVersion: tekton.dev/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        'f:metadata':
-          'f:annotations':
-            .: {}
-            'f:kubectl.kubernetes.io/last-applied-configuration': {}
-      manager: kubectl-client-side-apply
-      operation: Update
-      time: '2025-12-08T05:08:55Z'
-    - apiVersion: tekton.dev/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        'f:spec':
-          'f:finally': {}
-          'f:params': {}
-          'f:tasks': {}
-          'f:workspaces': {}
-      manager: Mozilla
-      operation: Update
-      time: '2025-12-08T14:23:41Z'
   name: cd-pipeline
-  namespace: mfrieri-dev
-  resourceVersion: '5352277101'
-  uid: a6bb44cf-1452-45d1-b2a2-a079c4216427
 spec:
   params:
     - name: GIT_URL
@@ -46,7 +9,7 @@ spec:
     - default: master
       name: GIT_REF
       type: string
-    - default: 'image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/ $(params.APP_NAME):latest'
+    - default: 'image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.APP_NAME):latest'
       name: IMAGE_NAME
       type: string
     - default: customers-service
@@ -135,8 +98,7 @@ spec:
       params:
         - name: IMAGE
           value: |-
-            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/
-            $(params.APP_NAME):latest
+            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.APP_NAME):latest
         - name: DOCKERFILE
           value: Dockerfile
         - name: CONTEXT
@@ -156,14 +118,12 @@ spec:
       params:
         - name: image-name
           value: |-
-            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/
-            $(params.APP_NAME):latest
+            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.APP_NAME):latest
         - name: manifest-dir
           value: k8s
         - name: IMAGE_NAME
           value: |-
-            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/
-            $(params.APP_NAME):latest
+            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.APP_NAME):latest
       runAfter:
         - buildah
       taskRef:
