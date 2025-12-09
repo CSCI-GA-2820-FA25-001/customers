@@ -24,10 +24,7 @@ For information on Waiting until elements are present in the HTML see:
 """
 import requests
 from compare3 import expect
-from behave import given, when, then
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions
+from behave import given
 
 # HTTP Return Codes
 HTTP_200_OK = 200
@@ -60,6 +57,10 @@ def step_impl(context):
             "last_name": row['last_name'],
             "address": row['address']
         }
+        
+        # Handle optional status column
+        if 'status' in row.headings:
+            payload['status'] = row['status']
         
         context.resp = requests.post(rest_endpoint, json=payload, timeout=WAIT_TIMEOUT)
         expect(context.resp.status_code).equal_to(HTTP_201_CREATED)
