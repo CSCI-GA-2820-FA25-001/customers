@@ -553,14 +553,10 @@
             }
 
             try {
-                const response = await fetch(`${API_BASE}/customers/${customerId}`, {
-                    method: 'DELETE'
-                });
+                const response = await fetch(`${API_BASE}/customers/${customerId}`, { method: 'DELETE' });
 
                 if (response.ok || response.status === 204) {
                     showFlash('Success: Customer deleted!', true);
-                    
-                    // Clear form if this customer was being edited
                     const currentId = document.getElementById('customer-id').value;
                     if (currentId == customerId) {
                         clearForm();
