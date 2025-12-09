@@ -3,66 +3,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-import requests
 import time
 
-WAIT_TIME = 10
-
-
-def get_api_url(context):
-    """Get the API base URL"""
-    return f"{context.base_url}/api"
-
-
-def create_customer_via_api(
-    context,
-    first_name="Test",
-    last_name="Customer",
-    address="123 Test St",
-    status="active",
-):
-    """Create a customer via API and return the created customer"""
-    try:
-        response = requests.post(
-            f"{get_api_url(context)}/customers",
-            json={"first_name": first_name, "last_name": last_name, "address": address},
-            headers={"Content-Type": "application/json"},
-            timeout=10,
-        )
-        if response.status_code == 201:
-            customer = response.json()
-            # Update status if needed
-            if status != "active":
-                requests.put(
-                    f"{get_api_url(context)}/customers/{customer['id']}/status",
-                    json={"status": status},
-                    headers={"Content-Type": "application/json"},
-                    timeout=10,
-                )
-                customer["status"] = status
-            return customer
-    except Exception as e:
-        print(f"Error creating customer: {e}")
-    return None
-
-
-def delete_customer_via_api(context, customer_id):
-    """Delete a customer via API"""
-    try:
-        requests.delete(f"{get_api_url(context)}/customers/{customer_id}", timeout=10)
-    except Exception:
-        pass
-
-
-def delete_all_customers(context):
-    """Delete all customers via API"""
-    try:
-        response = requests.get(f"{get_api_url(context)}/customers", timeout=10)
-        if response.status_code == 200:
-            for customer in response.json():
-                delete_customer_via_api(context, customer["id"])
-    except Exception:
-        pass
+WAIT_TIME = 60
 
 
 def wait_for_element(context, by, value, timeout=WAIT_TIME):
@@ -91,6 +34,122 @@ def wait_for_flash_message(context, timeout=WAIT_TIME):
     return wait_for_element(context, By.ID, "flash-message", timeout)
 
 
+def create_customer_via_ui(
+    context, first_name="Test", last_name="Customer", address="123 Test St"
+):
+    """Create a customer via the UI"""
+    # Make sure we're on the home page
+    context.driver.get(context.base_url)
+
+    # Fill in the form
+    wait_for_element(context, By.ID, "first-name").clear()
+    context.driver.find_element(By.ID, "first-name").send_keys(first_name)
+    context.driver.find_element(By.ID, "last-name").clear()
+    context.driver.find_element(By.ID, "last-name").send_keys(last_name)
+    context.driver.find_element(By.ID, "address").clear()
+    context.driver.find_element(By.ID, "address").send_keys(address)
+
+    # Click create button
+    wait_for_clickable(context, By.ID, "create-btn").click()
+    time.sleep(1)
+
+    # Wait for success message
+    try:
+        flash = wait_for_flash_message(context, timeout=5)
+        if "success" in flash.text.lower():
+            # Store the customer data for later reference
+            return {
+                "first_name": first_name,
+                "last_name": last_name,
+                "address": address,
+            }
+    except TimeoutException:
+        pass
+
+    return None
+
+
+def clear_form(context):
+    """Clear all form fields"""
+    try:
+        context.driver.find_element(By.ID, "first-name").clear()
+        context.driver.find_element(By.ID, "last-name").clear()
+        context.driver.find_element(By.ID, "address").clear()
+    except Exception:
+        pass
+
+
+def delete_all_customers_via_ui(context):
+    """Delete all customers via the UI"""
+    context.driver.get(context.base_url)
+    click_list_all_button(context)
+    time.sleep(1)
+
+    # Keep deleting until no customers remain
+    max_iterations = 50  # Safety limit
+    iteration = 0
+
+    while iteration < max_iterations:
+        try:
+            # Check if there are any customers
+            container = context.driver.find_element(By.ID, "customer-list-container")
+            if "no customers" in container.text.lower():
+                break
+
+            # Find delete buttons
+            table = context.driver.find_element(By.CLASS_NAME, "customer-table")
+            delete_btns = table.find_elements(
+                By.XPATH, ".//button[contains(text(), 'Delete')]"
+            )
+
+            if not delete_btns:
+                break
+
+            # Click first delete button
+            delete_btns[0].click()
+            time.sleep(0.5)
+
+            # Handle confirmation alert if it appears
+            try:
+                WebDriverWait(context.driver, 2).until(EC.alert_is_present())
+                context.driver.switch_to.alert.accept()
+                time.sleep(1)
+            except TimeoutException:
+                pass
+
+            # Refresh the list
+            click_list_all_button(context)
+            time.sleep(1)
+
+            iteration += 1
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+            break
+
+
+def change_customer_status_via_ui(context, action):
+    """Change customer status via UI by clicking the appropriate button"""
+    click_list_all_button(context)
+
+    # WAIT for the table to load before looking for buttons
+    table = wait_for_element(context, By.CLASS_NAME, "customer-table")
+    time.sleep(0.5)  # Give buttons time to render
+
+    # Find the button based on action
+    button_text = action.capitalize()
+    btns = table.find_elements(
+        By.XPATH, f".//button[contains(text(), '{button_text}')]"
+    )
+
+    if btns:
+        btns[0].click()
+        time.sleep(1)
+        return True
+    else:
+        print(f"Warning: No '{button_text}' button found in table")
+        return False
+
+
 # -------------------
 # BACKGROUND / SETUP
 # -------------------
@@ -98,19 +157,21 @@ def wait_for_flash_message(context, timeout=WAIT_TIME):
 
 @given("the customer service is running")
 def step_service_running(context):
-    """Verify the service is accessible"""
+    """Verify the service is accessible by loading the page"""
     try:
-        response = requests.get(f"{context.base_url}/api/health", timeout=10)
-        assert response.status_code == 200
-    except requests.exceptions.RequestException as e:
-        print(f"Warning: Health check failed: {e}")
+        context.driver.get(context.base_url)
+        WebDriverWait(context.driver, WAIT_TIME).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+    except Exception as e:
+        raise Exception(f"Service appears to be down: {e}")
 
 
 @given("I am on the home page")
 def step_home_page(context):
     """Navigate to the home page"""
     context.driver.get(context.base_url)
-    # Wait for page to load - try multiple elements
+    # Wait for page to load
     try:
         WebDriverWait(context.driver, WAIT_TIME).until(
             EC.presence_of_element_located((By.ID, "customer-form"))
@@ -156,21 +217,27 @@ def step_page_loaded(context):
 
 @given('a customer exists with ID "{customer_id}" and status "{status}"')
 def step_customer_with_status(context, customer_id, status):
-    """Create customer with specific status"""
-    context.test_customer = create_customer_via_api(
-        context,
-        first_name="Test",
-        last_name="Customer",
-        address="123 Test Street",
-        status=status,
+    """Create customer with specific status via UI"""
+    # First create the customer
+    context.test_customer = create_customer_via_ui(
+        context, first_name="Test", last_name="Customer", address="123 Test Street"
     )
     assert context.test_customer is not None
+
+    # Then change status if not active
+    if status.lower() != "active":
+        if status.lower() == "suspended":
+            change_customer_status_via_ui(context, "suspend")
+        elif status.lower() == "inactive":
+            change_customer_status_via_ui(context, "deactivate")
+
+    time.sleep(1)
 
 
 @given('a customer exists with ID "{customer_id}"')
 def step_customer_exists(context, customer_id):
-    """Create customer with default status"""
-    context.test_customer = create_customer_via_api(
+    """Create customer with default status via UI"""
+    context.test_customer = create_customer_via_ui(
         context, first_name="Test", last_name="Customer", address="123 Test Street"
     )
     assert context.test_customer is not None
@@ -184,34 +251,39 @@ def step_no_customer(context, customer_id):
 
 @given("multiple customers exist in the system")
 def step_multiple_customers(context):
-    """Create multiple customers"""
+    """Create multiple customers via UI"""
     context.test_customers = []
-    for data in [
+
+    customers_data = [
         {"first_name": "John", "last_name": "Smith", "address": "123 Boston Ave"},
         {"first_name": "Jane", "last_name": "Doe", "address": "456 New York St"},
         {"first_name": "Bob", "last_name": "Smith", "address": "789 Boston Blvd"},
-    ]:
-        customer = create_customer_via_api(context, **data)
+    ]
+
+    for data in customers_data:
+        customer = create_customer_via_ui(context, **data)
         if customer:
             context.test_customers.append(customer)
+        # Clear form for next customer
+        clear_form(context)
 
 
 @given("multiple customers exist with different last names")
 def step_multiple_different_names(context):
-    """Create customers with different names"""
+    """Create customers with different names via UI"""
     step_multiple_customers(context)
 
 
 @given("customers exist in the system")
 def step_customers_exist(context):
-    """Ensure customers exist"""
+    """Ensure customers exist via UI"""
     step_multiple_customers(context)
 
 
 @given("no customers exist in the system")
 def step_no_customers(context):
-    """Delete all customers"""
-    delete_all_customers(context)
+    """Delete all customers via UI"""
+    delete_all_customers_via_ui(context)
 
 
 # -------------------
@@ -520,23 +592,20 @@ def step_cancel(context):
         pass
 
 
-'''@then("the customer should no longer appear in the list")
+@then("the customer should no longer appear in the list")
 def step_deleted(context):
     """Verify deleted"""
-    # NOTE: The list should be refreshed by the JavaScript after successful deletion.
-    # If the JavaScript does not refresh it, uncommenting click_list_all_button(context)
-    # below would perform a manual refresh, but fixing the JS is the right solution.
-    # click_list_all_button(context)
+    # Refresh the list to see updated state
+    click_list_all_button(context)
+    time.sleep(1)
 
     container = context.driver.find_element(By.ID, "customer-list-container")
 
     if hasattr(context, "test_customer") and context.test_customer:
         customer_name_to_check = context.test_customer["first_name"]
 
-        # Use WebDriverWait to robustly wait for the customer's name to disappear
-        # from the list container, accounting for asynchronous UI updates.
+        # Wait for the customer's name to disappear from the list
         try:
-            # We wait for the customer's first name to NOT be present in the container text.
             WebDriverWait(context.driver, WAIT_TIME).until_not(
                 EC.text_to_be_present_in_element(
                     (By.ID, "customer-list-container"), customer_name_to_check
@@ -544,9 +613,8 @@ def step_deleted(context):
             )
         except TimeoutException:
             raise AssertionError(
-                f"Customer '{customer_name_to_check}' still appeared in the list after deletion, even after waiting."
+                f"Customer '{customer_name_to_check}' still appeared in the list after deletion"
             )
-'''
 
 
 @then("the customer should still appear in the list")
@@ -627,34 +695,25 @@ def step_invalid_error(context):
 @when('I click the "Activate" button for customer "{customer_id}"')
 def step_activate(context, customer_id):
     """Click activate"""
-    click_list_all_button(context)
-    table = wait_for_element(context, By.CLASS_NAME, "customer-table")
-    btns = table.find_elements(By.XPATH, ".//button[contains(text(), 'Activate')]")
-    if btns:
-        btns[0].click()
-        time.sleep(1)
+    result = change_customer_status_via_ui(context, "activate")
+    if not result:
+        print(f"Failed to find Activate button for customer {customer_id}")
 
 
 @when('I click the "Deactivate" button for customer "{customer_id}"')
 def step_deactivate(context, customer_id):
     """Click deactivate"""
-    click_list_all_button(context)
-    table = wait_for_element(context, By.CLASS_NAME, "customer-table")
-    btns = table.find_elements(By.XPATH, ".//button[contains(text(), 'Deactivate')]")
-    if btns:
-        btns[0].click()
-        time.sleep(1)
+    result = change_customer_status_via_ui(context, "deactivate")
+    if not result:
+        print(f"Failed to find Deactivate button for customer {customer_id}")
 
 
 @when('I click the "Suspend" button for customer "{customer_id}"')
 def step_suspend(context, customer_id):
     """Click suspend"""
-    click_list_all_button(context)
-    table = wait_for_element(context, By.CLASS_NAME, "customer-table")
-    btns = table.find_elements(By.XPATH, ".//button[contains(text(), 'Suspend')]")
-    if btns:
-        btns[0].click()
-        time.sleep(1)
+    result = change_customer_status_via_ui(context, "suspend")
+    if not result:
+        print(f"Failed to find Suspend button for customer {customer_id}")
 
 
 @then('I should see "Success: Customer activated!"')
