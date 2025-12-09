@@ -181,9 +181,14 @@ spec:
           oc apply -f $(params.manifest-dir)/deployment.yaml
           oc apply -f $(params.manifest-dir)/service.yaml
 
+          echo "*** Waiting for deployment to be ready ***"
+          oc rollout status deployment/customers --timeout=5m
+
           echo "*** Current Pods ***"
           oc get pods
-
+          
+          echo "*** Waiting additional time for service to stabilize ***"
+          sleep 15
 
 ---
 apiVersion: tekton.dev/v1
