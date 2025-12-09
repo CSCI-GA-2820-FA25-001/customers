@@ -111,17 +111,12 @@ def get_chrome():
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1280,1300")
-
-    # Add additional stability options
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--ignore-certificate-errors")
     options.add_argument("--disable-extensions")
-    options.add_argument("--disable-infobars")
-    options.add_argument("--disable-notifications")
-
-    return webdriver.Chrome(
-        options=options, service=webdriver.ChromeService("/usr/bin/chromedriver")
-    )
-
+    options.add_argument("--disable-web-security")
+    options.add_argument("--allow-running-insecure-content")
+    return webdriver.Chrome(options=options)
 
 def get_firefox():
     """Creates a headless Firefox driver"""
