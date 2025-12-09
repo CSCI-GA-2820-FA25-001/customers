@@ -1,0 +1,16 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: customers-service
+  labels:
+    app: customers
+spec:
+  to:
+    kind: Service
+    name: customers-service
+    weight: 100
+  port:
+    targetPort: 80       
+  tls:
+    termination: edge
+  wildcardPolicy: None
