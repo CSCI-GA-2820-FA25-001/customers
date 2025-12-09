@@ -219,6 +219,11 @@ async function confirmDelete(id) {
         try {
             await deleteCustomer(id);
             showFlash('Success: Customer deleted!', 'success');
+            
+            // Small delay to ensure backend processes the deletion
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Refresh the list
             await loadAllCustomers();
         } catch (error) {
             showFlash('Error: ' + error.message, 'error');
@@ -250,13 +255,19 @@ async function loadAllCustomers() {
 customerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    // Check if form is valid using HTML5 validation
+    if (!customerForm.checkValidity()) {
+        customerForm.reportValidity();  // Show validation messages
+        return;
+    }
+    
     const data = {
         first_name: firstNameInput.value.trim(),
         last_name: lastNameInput.value.trim(),
         address: addressInput.value.trim()
     };
     
-    // Validation
+    // Additional validation for trimmed values
     if (!data.first_name || !data.last_name || !data.address) {
         showFlash('Error: All fields are required', 'error');
         return;
