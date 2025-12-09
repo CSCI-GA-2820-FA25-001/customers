@@ -1,56 +1,23 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  annotations:
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"tekton.dev/v1","kind":"Pipeline","metadata":{"annotations":{},"name":"cd-pipeline","namespace":"mfrieri-dev"},"spec":{"params":[{"name":"git-url","type":"string"},{"default":"master","name":"git-ref","type":"string"},{"name":"image-name","type":"string"},{"name":"app-name","type":"string"}],"tasks":[{"name":"clone","params":[{"name":"url","value":"$(params.git-url)"},{"name":"revision","value":"$(params.git-ref)"}],"taskRef":{"name":"checkout"},"workspaces":[{"name":"output","workspace":"pipeline-workspace"}]},{"name":"lint","runAfter":["clone"],"taskRef":{"name":"lint"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]},{"name":"test","runAfter":["clone"],"taskRef":{"name":"tests"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]},{"name":"deploy","params":[{"name":"image-name","value":"$(params.image-name)"},{"name":"manifest-dir","value":"k8s"}],"runAfter":["lint","test"],"taskRef":{"name":"deploy-image"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]},{"name":"bdd-test","params":[{"name":"base-url","value":"http://$(params.app-name):8080"}],"runAfter":["deploy"],"taskRef":{"name":"behave"},"workspaces":[{"name":"source","workspace":"pipeline-workspace"}]}],"workspaces":[{"name":"pipeline-workspace"}]}}
-  creationTimestamp: '2025-12-05T02:23:14Z'
-  generation: 26
-  managedFields:
-    - apiVersion: tekton.dev/v1beta1
-      fieldsType: FieldsV1
-      fieldsV1:
-        'f:spec': {}
-      manager: kubectl-create
-      operation: Update
-      time: '2025-12-05T02:23:14Z'
-    - apiVersion: tekton.dev/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        'f:metadata':
-          'f:annotations':
-            .: {}
-            'f:kubectl.kubernetes.io/last-applied-configuration': {}
-      manager: kubectl-client-side-apply
-      operation: Update
-      time: '2025-12-08T05:08:55Z'
-    - apiVersion: tekton.dev/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        'f:spec':
-          'f:finally': {}
-          'f:params': {}
-          'f:tasks': {}
-          'f:workspaces': {}
-      manager: Mozilla
-      operation: Update
-      time: '2025-12-08T14:23:41Z'
   name: cd-pipeline
-  namespace: mfrieri-dev
-  resourceVersion: '5352277101'
-  uid: a6bb44cf-1452-45d1-b2a2-a079c4216427
 spec:
   params:
-    - name: GIT_URL
+    - description: The URL to the git repo
+      name: GIT_REPO
       type: string
     - default: master
+      description: The reference (branch or ref)
       name: GIT_REF
       type: string
-    - default: 'image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/ $(params.APP_NAME):latest'
-      name: IMAGE_NAME
-      type: string
-    - default: customers-service
+    - default: customers
+      description: Name of the application
       name: APP_NAME
+      type: string
+    - default: 'image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.APP_NAME):latest'
+      description: The name of the image to build
+      name: IMAGE_NAME
       type: string
   tasks:
     - name: git-clone
@@ -74,7 +41,7 @@ spec:
         - name: SSL_VERIFY
           value: 'true'
         - name: URL
-          value: $(params.GIT_URL)
+          value: $(params.GIT_REPO)
         - name: REVISION
           value: $(params.GIT_REF)
         - name: REFSPEC
@@ -104,8 +71,9 @@ spec:
         - name: path
           value: service
         - name: args
-          value:
-            - '--fail-under=9.0'
+          value: []
+        - name: requirements-file
+          value: requirements.txt
       runAfter:
         - git-clone
       taskRef:
@@ -114,11 +82,10 @@ spec:
       workspaces:
         - name: source
           workspace: pipeline-workspace
-    - name: pytest-env
+    - name: testing
       params:
         - name: pytest-args
-          value:
-            - '--pspec'
+          value: []
         - name: secret-name
           value: postgres-creds
         - name: secret-key
@@ -134,41 +101,70 @@ spec:
     - name: buildah
       params:
         - name: IMAGE
-          value: |-
-            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/
-            $(params.APP_NAME):latest
+          value: $(params.IMAGE_NAME)
         - name: DOCKERFILE
-          value: Dockerfile
+          value: ./Dockerfile
+        - name: BUILD_ARGS
+          value:
+            - ''
         - name: CONTEXT
           value: .
-        - name: BUILDAH_FLAGS
-          value: '--storage-driver=vfs --isolation=chroot'
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: FORMAT
+          value: oci
+        - name: BUILD_EXTRA_ARGS
+          value: ''
+        - name: PUSH_EXTRA_ARGS
+          value: ''
+        - name: SKIP_PUSH
+          value: 'false'
+        - name: TLS_VERIFY
+          value: 'true'
+        - name: VERBOSE
+          value: 'false'
       runAfter:
         - pylint
-        - pytest-env
+        - testing
       taskRef:
-        kind: Task
-        name: buildah
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
       workspaces:
         - name: source
           workspace: pipeline-workspace
     - name: deploy-image
       params:
         - name: image-name
-          value: |-
-            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/
-            $(params.APP_NAME):latest
+          value: $(params.IMAGE_NAME)
         - name: manifest-dir
           value: k8s
-        - name: IMAGE_NAME
-          value: |-
-            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/
-            $(params.APP_NAME):latest
       runAfter:
         - buildah
       taskRef:
         kind: Task
         name: deploy-image
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+    - name: behave
+      params:
+        - name: base-url
+          value: "http://customers-service:8080"
+        - name: wait-seconds
+          value: "60"
+        - name: driver
+          value: "chrome"
+      runAfter:
+        - deploy-image
+      taskRef:
+        kind: Task
+        name: behave
       workspaces:
         - name: source
           workspace: pipeline-workspace
