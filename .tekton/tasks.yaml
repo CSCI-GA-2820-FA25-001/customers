@@ -183,7 +183,6 @@ spec:
 
           echo "*** Waiting for deployment to be ready ***"
           oc rollout status deployment/customers --timeout=5m
-
           echo "*** Current Pods ***"
           oc get pods
           
