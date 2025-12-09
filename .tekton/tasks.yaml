@@ -180,7 +180,8 @@ spec:
           echo "*** Applying manifests ***"
           oc apply -f $(params.manifest-dir)/deployment.yaml
           oc apply -f $(params.manifest-dir)/service.yaml
-
+          oc apply -f $(params.manifest-dir)/route.yaml
+          
           echo "*** Current Pods ***"
           oc get pods
 

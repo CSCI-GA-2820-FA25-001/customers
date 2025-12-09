@@ -17,7 +17,7 @@ Feature: Customer User Interface
 
     Scenario: Activate a customer account
         Given I am on the home page
-        And a customer exists with ID "12345" and status "inactive"
+        And a customer exists with ID "12345" and status "deactivated"
         When I click the "Activate" button for customer "12345"
         Then I should see "Success: Customer activated!"
         And I should see the status for customer "12345" change to "active"
@@ -27,7 +27,7 @@ Feature: Customer User Interface
         And a customer exists with ID "12345" and status "active"
         When I click the "Deactivate" button for customer "12345"
         Then I should see "Success: Customer deactivated!"
-        And I should see the status for customer "12345" change to "inactive"
+        And I should see the status for customer "12345" change to "deactivated"
 
     Scenario: Suspend a customer account
         Given I am on the home page
