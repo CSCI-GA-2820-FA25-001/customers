@@ -674,24 +674,24 @@
                         <td><span class="status-badge ${statusClass}">${customer.status}</span></td>
                         <td>
                             <div class="action-buttons">
-                                <button class="btn-primary btn-small" onclick='editCustomer(${JSON.stringify(customer)})'>
+                                <button id="edit-btn-${customer.id}" class="btn-primary btn-small" onclick='editCustomer(${JSON.stringify(customer)})'>
                                     Edit
                                 </button>
-                                <button class="btn-danger btn-small" onclick="deleteCustomer(${customer.id}, '${customer.first_name} ${customer.last_name}')">
+                                <button id="delete-btn-${customer.id}" class="btn-danger btn-small" onclick="deleteCustomer(${customer.id}, '${customer.first_name} ${customer.last_name}')">
                                     Delete
                                 </button>
                                 ${customer.status !== 'active' ? `
-                                    <button class="btn-success btn-small" onclick="updateCustomerStatus(${customer.id}, 'active')">
+                                    <button id="activate-btn-${customer.id}" class="btn-success btn-small" onclick="updateCustomerStatus(${customer.id}, 'active')">
                                         Activate
                                     </button>
                                 ` : ''}
                                 ${customer.status !== 'suspended' ? `
-                                    <button class="btn-warning btn-small" onclick="updateCustomerStatus(${customer.id}, 'suspended')">
+                                    <button id="suspend-btn-${customer.id}" class="btn-warning btn-small" onclick="updateCustomerStatus(${customer.id}, 'suspended')">
                                         Suspend
                                     </button>
                                 ` : ''}
                                 ${customer.status !== 'deactivated' ? `
-                                    <button class="btn-secondary btn-small" onclick="updateCustomerStatus(${customer.id}, 'deactivated')">
+                                    <button id="deactivate-btn-${customer.id}" class="btn-secondary btn-small" onclick="updateCustomerStatus(${customer.id}, 'deactivated')">
                                         Deactivate
                                     </button>
                                 ` : ''}

@@ -64,9 +64,17 @@ def step_impl(context):
         context.resp = requests.post(rest_endpoint, json=payload, timeout=WAIT_TIMEOUT)
         expect(context.resp.status_code).equal_to(HTTP_201_CREATED)
         
+        # Store the customer ID for later use in tests
+        customer_data = context.resp.json()
+        if not hasattr(context, 'customers'):
+            context.customers = {}
+        # Store by name for easy lookup
+        key = f"{row['first_name']} {row['last_name']}"
+        context.customers[key] = customer_data['id']
+        
         # If status was provided and not 'active', update it
         if 'status' in row.headings and row['status'] != 'active':
-            customer_id = context.resp.json()['id']
+            customer_id = customer_data['id']
             status_payload = {"status": row['status']}
             context.resp = requests.put(
                 f"{rest_endpoint}/{customer_id}/status",
@@ -77,38 +85,26 @@ def step_impl(context):
 
 
 ######################################################################
-# Steps for clicking action buttons in the customer table
+# Step to press action buttons in the table (Edit, Delete, etc.)
+# Button IDs follow pattern: {action}-btn-{customer_id}
 ######################################################################
 
-@when('I click the "{action}" button for "{customer_name}" in the results')
+@when('I press the "{action}" button for customer "{customer_name}"')
 def step_impl(context, action, customer_name):
-    """Click an action button (Edit, Delete, Activate, Deactivate, Suspend) for a specific customer in the table"""
-    # Wait for the table to load and contain the customer
-    WebDriverWait(context.driver, context.wait_seconds).until(
-        expected_conditions.text_to_be_present_in_element(
-            (By.ID, "search_results"), customer_name.split()[0]
-        )
+    """Press an action button for a specific customer by name"""
+    # Get customer ID from stored data
+    customer_id = context.customers.get(customer_name)
+    if not customer_id:
+        raise AssertionError(f"Customer '{customer_name}' not found in test data")
+    
+    # Build button ID: edit-btn-123, delete-btn-123, etc.
+    button_id = f"{action.lower()}-btn-{customer_id}"
+    
+    # Wait for button to be clickable and click it
+    button = WebDriverWait(context.driver, context.wait_seconds).until(
+        expected_conditions.element_to_be_clickable((By.ID, button_id))
     )
-    
-    # Find all rows in the table
-    container = context.driver.find_element(By.ID, "search_results")
-    rows = container.find_elements(By.TAG_NAME, "tr")
-    
-    # Look for the row with this customer
-    for row in rows:
-        row_text = row.text
-        # Check if this row contains the customer name
-        name_parts = customer_name.split()
-        if all(part in row_text for part in name_parts):
-            # Find the action button in this row
-            buttons = row.find_elements(By.TAG_NAME, "button")
-            for btn in buttons:
-                if action.lower() in btn.text.lower():
-                    btn.click()
-                    return
-            raise AssertionError(f"Button '{action}' not found for customer '{customer_name}'")
-    
-    raise AssertionError(f"Customer '{customer_name}' not found in the table")
+    button.click()
 
 
 @when('I confirm the deletion')
@@ -134,28 +130,26 @@ def step_impl(context):
 @then('I should see "{status}" as the status for "{customer_name}" in the results')
 def step_impl(context, status, customer_name):
     """Verify customer has specific status in the table"""
-    import time
-    time.sleep(0.5)  # Small wait for table to update
+    # Get customer ID
+    customer_id = context.customers.get(customer_name)
+    if not customer_id:
+        raise AssertionError(f"Customer '{customer_name}' not found in test data")
     
-    # Wait for the table to contain the customer
+    # Wait for table to update and find the row
     WebDriverWait(context.driver, context.wait_seconds).until(
         expected_conditions.text_to_be_present_in_element(
             (By.ID, "search_results"), customer_name.split()[0]
         )
     )
     
-    # Find all rows in the table
+    # Find all rows and check the status
     container = context.driver.find_element(By.ID, "search_results")
     rows = container.find_elements(By.TAG_NAME, "tr")
     
-    # Look for the row with this customer
     for row in rows:
-        row_text = row.text
-        name_parts = customer_name.split()
-        if all(part in row_text for part in name_parts):
-            # Check if the status is in the row
-            assert status.lower() in row_text.lower(), \
-                f"Expected status '{status}' for {customer_name}, but row contains: {row_text}"
+        if str(customer_id) in row.text:
+            assert status.lower() in row.text.lower(), \
+                f"Expected status '{status}' for {customer_name}, but row contains: {row.text}"
             return
     
-    raise AssertionError(f"Customer '{customer_name}' not found in table")
+    raise AssertionError(f"Customer '{customer_name}' with ID {customer_id} not found in table")

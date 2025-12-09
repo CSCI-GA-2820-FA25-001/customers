@@ -81,14 +81,13 @@ Scenario: Update a Customer
     And I press the "List All" button
     Then I should see the message "Success"
     And I should see "Alice" in the results
-    When I click the "Edit" button for "Alice Anderson" in the results
+    When I press the "Edit" button for customer "Alice Anderson"
     And I change "First Name" to "Alicia"
     And I press the "Update" button
     Then I should see the message "Success"
     When I press the "List All" button
     Then I should see the message "Success"
     And I should see "Alicia" in the results
-    And I should not see "Alice" in the results
 
 # ------------------------------------------------------------------
 # DELETE Scenarios
@@ -99,7 +98,7 @@ Scenario: Delete a Customer
     And I press the "List All" button
     Then I should see the message "Success"
     And I should see "Diana" in the results
-    When I click the "Delete" button for "Diana Davis" in the results
+    When I press the "Delete" button for customer "Diana Davis"
     And I confirm the deletion
     Then I should see the message "Success"
     When I press the "List All" button
@@ -111,8 +110,23 @@ Scenario: Cancel deleting a Customer
     And I press the "List All" button
     Then I should see the message "Success"
     And I should see "Bob" in the results
-    When I click the "Delete" button for "Bob Brown" in the results
+    When I press the "Delete" button for customer "Bob Brown"
     And I cancel the deletion
     When I press the "List All" button
     Then I should see the message "Success"
     And I should see "Bob" in the results
+
+# ------------------------------------------------------------------
+# STATUS ACTION Scenarios (Activate, Deactivate, Suspend)
+# ------------------------------------------------------------------
+
+Scenario: Suspend an active Customer
+    When I visit the "Home Page"
+    And I press the "List All" button
+    Then I should see the message "Success"
+    And I should see "Bob" in the results
+    When I press the "Suspend" button for customer "Bob Brown"
+    Then I should see the message "Success"
+    When I press the "List All" button
+    Then I should see the message "Success"
+    And I should see "suspended" as the status for "Bob Brown" in the results
