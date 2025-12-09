@@ -48,7 +48,7 @@ header h1 {
 }
 
 /* Flash Messages */
-.flash-message {
+.flash_message {
     padding: 15px 20px;
     border-radius: 5px;
     margin-bottom: 20px;
@@ -67,19 +67,19 @@ header h1 {
     }
 }
 
-.flash-message.success {
+.flash_message.success {
     background: #d4edda;
     color: #155724;
     border: 1px solid #c3e6cb;
 }
 
-.flash-message.error {
+.flash_message.error {
     background: #f8d7da;
     color: #721c24;
     border: 1px solid #f5c6cb;
 }
 
-.flash-message.hidden {
+.flash_message.hidden {
     display: none;
 }
 

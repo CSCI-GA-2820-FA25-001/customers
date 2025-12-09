@@ -156,7 +156,8 @@
             font-size: 0.9em;
         }
 
-        #flash-message {
+        /* CHANGED ID: flash-message -> flash_message */
+        #flash_message {
             padding: 15px 20px;
             margin: 20px 30px;
             border-radius: 6px;
@@ -203,7 +204,8 @@
             align-items: end;
         }
 
-        #customer-list-container {
+        /* CHANGED ID: customer-list-container -> search_results */
+        #search_results {
             background: white;
             padding: 20px;
             border-radius: 8px;
@@ -338,37 +340,45 @@
             <p class="subtitle">Manage your customer accounts efficiently</p>
         </header>
 
-        <div id="flash-message"></div>
+        <!-- CHANGED ID: flash-message -> flash_message -->
+        <div id="flash_message"></div>
 
         <div class="main-content">
             <!-- Form Section -->
             <div class="form-section">
                 <h2 class="section-title">Customer Form</h2>
                 <form id="customer-form">
-                    <input type="hidden" id="customer-id" />
+                    <!-- CHANGED ID: customer-id -> customer_id -->
+                    <input type="hidden" id="customer_id" />
                     
+                    <!-- CHANGED ID: first-name -> customer_first_name -->
                     <div class="form-group">
-                        <label for="first-name">First Name *</label>
-                        <input type="text" id="first-name" placeholder="Enter first name" />
+                        <label for="customer_first_name">First Name *</label>
+                        <input type="text" id="customer_first_name" placeholder="Enter first name" />
                     </div>
 
+                    <!-- CHANGED ID: last-name -> customer_last_name -->
                     <div class="form-group">
-                        <label for="last-name">Last Name *</label>
-                        <input type="text" id="last-name" placeholder="Enter last name" />
+                        <label for="customer_last_name">Last Name *</label>
+                        <input type="text" id="customer_last_name" placeholder="Enter last name" />
                     </div>
 
+                    <!-- CHANGED ID: address -> customer_address -->
                     <div class="form-group">
-                        <label for="address">Address *</label>
-                        <input type="text" id="address" placeholder="Enter address" />
+                        <label for="customer_address">Address *</label>
+                        <input type="text" id="customer_address" placeholder="Enter address" />
                     </div>
 
                     <div class="button-group">
+                        <!-- CHANGED ID: create-btn stays same (matches pattern) -->
                         <button type="button" id="create-btn" class="btn-success">
                             ➕ Create Customer
                         </button>
+                        <!-- CHANGED ID: update-btn stays same (matches pattern) -->
                         <button type="button" id="update-btn" class="btn-warning" style="display:none;">
                             ✏️ Update Customer
                         </button>
+                        <!-- CHANGED ID: clear-btn stays same (matches pattern) -->
                         <button type="button" id="clear-btn" class="btn-secondary">
                             🔄 Clear Form
                         </button>
@@ -384,23 +394,27 @@
                 <div class="search-section">
                     <form id="search-form">
                         <div class="search-form">
+                            <!-- CHANGED ID: search-id -> customer_search_id -->
                             <div class="form-group">
-                                <label for="search-id">Customer ID</label>
-                                <input type="number" id="search-id" placeholder="Search by ID" />
+                                <label for="customer_search_id">Customer ID</label>
+                                <input type="number" id="customer_search_id" placeholder="Search by ID" />
+                            </div>
+
+                            <!-- CHANGED ID: search-last-name -> customer_search_last_name -->
+                            <div class="form-group">
+                                <label for="customer_search_last_name">Last Name</label>
+                                <input type="text" id="customer_search_last_name" placeholder="Search by last name" />
+                            </div>
+
+                            <!-- CHANGED ID: search-address -> customer_search_address -->
+                            <div class="form-group">
+                                <label for="customer_search_address">Address</label>
+                                <input type="text" id="customer_search_address" placeholder="Search by address" />
                             </div>
 
                             <div class="form-group">
-                                <label for="search-last-name">Last Name</label>
-                                <input type="text" id="search-last-name" placeholder="Search by last name" />
-                            </div>
-
-                            <div class="form-group">
-                                <label for="search-address">Address</label>
-                                <input type="text" id="search-address" placeholder="Search by address" />
-                            </div>
-
-                            <div class="form-group">
-                                <button type="submit" class="btn-primary">
+                                <!-- CHANGED: type="submit" -> type="button" with id="search-btn" for BDD -->
+                                <button type="button" id="search-btn" class="btn-primary">
                                     🔍 Search
                                 </button>
                             </div>
@@ -409,12 +423,14 @@
                 </div>
 
                 <div class="button-group" style="margin-bottom: 15px;">
-                    <button id="list-all-btn" class="btn-info">
+                    <!-- CHANGED ID: list-all-btn -> list_all-btn (underscore for BDD pattern) -->
+                    <button id="list_all-btn" class="btn-info">
                         📋 List All Customers
                     </button>
                 </div>
 
-                <div id="customer-list-container">
+                <!-- CHANGED ID: customer-list-container -> search_results -->
+                <div id="search_results">
                     <div class="empty-state">
                         <div class="empty-state-icon">👥</div>
                         <div class="empty-state-text">Click "List All Customers" to view all customers</div>
@@ -428,9 +444,9 @@
         const API_BASE = '/api';
         let currentCustomerId = null;
 
-        // Flash message utility
+        // Flash message utility - CHANGED: uses flash_message
         function showFlash(message, isSuccess = true) {
-            const flash = document.getElementById('flash-message');
+            const flash = document.getElementById('flash_message');
             flash.textContent = message;
             flash.className = isSuccess ? 'flash-success' : 'flash-error';
             flash.style.display = 'block';
@@ -440,23 +456,23 @@
             }, 5000);
         }
 
-        // Clear form
+        // Clear form - CHANGED: uses new IDs
         function clearForm() {
-            document.getElementById('customer-id').value = '';
-            document.getElementById('first-name').value = '';
-            document.getElementById('last-name').value = '';
-            document.getElementById('address').value = '';
+            document.getElementById('customer_id').value = '';
+            document.getElementById('customer_first_name').value = '';
+            document.getElementById('customer_last_name').value = '';
+            document.getElementById('customer_address').value = '';
             currentCustomerId = null;
             
             document.getElementById('create-btn').style.display = 'inline-flex';
             document.getElementById('update-btn').style.display = 'none';
         }
 
-        // Create customer
+        // Create customer - CHANGED: uses new IDs
         async function createCustomer() {
-            const firstName = document.getElementById('first-name').value.trim();
-            const lastName = document.getElementById('last-name').value.trim();
-            const address = document.getElementById('address').value.trim();
+            const firstName = document.getElementById('customer_first_name').value.trim();
+            const lastName = document.getElementById('customer_last_name').value.trim();
+            const address = document.getElementById('customer_address').value.trim();
 
             // Validate each field individually for specific error messages
             if (!firstName) {
@@ -499,12 +515,12 @@
             }
         }
 
-        // Update customer
+        // Update customer - CHANGED: uses new IDs
         async function updateCustomer() {
-            const customerId = document.getElementById('customer-id').value;
-            const firstName = document.getElementById('first-name').value.trim();
-            const lastName = document.getElementById('last-name').value.trim();
-            const address = document.getElementById('address').value.trim();
+            const customerId = document.getElementById('customer_id').value;
+            const firstName = document.getElementById('customer_first_name').value.trim();
+            const lastName = document.getElementById('customer_last_name').value.trim();
+            const address = document.getElementById('customer_address').value.trim();
 
             // Validate each field individually for specific error messages
             if (!firstName) {
@@ -546,7 +562,7 @@
             }
         }
 
-        // Delete customer
+        // Delete customer - CHANGED: uses new ID
         async function deleteCustomer(customerId, customerName) {
             if (!confirm(`Are you sure you want to delete ${customerName}?`)) {
                 return;
@@ -557,10 +573,11 @@
 
                 if (response.ok || response.status === 204) {
                     showFlash('Success: Customer deleted!', true);
-                    const currentId = document.getElementById('customer-id').value;
+                    const currentId = document.getElementById('customer_id').value;
                     if (currentId == customerId) {
                         clearForm();
                     }
+                    listAllCustomers();
                 } else {
                     const error = await response.json();
                     showFlash(`Error: ${error.message || 'Failed to delete customer'}`, false);
@@ -570,12 +587,12 @@
             }
         }
 
-        // Load customer for editing
+        // Load customer for editing - CHANGED: uses new IDs
         function editCustomer(customer) {
-            document.getElementById('customer-id').value = customer.id;
-            document.getElementById('first-name').value = customer.first_name;
-            document.getElementById('last-name').value = customer.last_name;
-            document.getElementById('address').value = customer.address;
+            document.getElementById('customer_id').value = customer.id;
+            document.getElementById('customer_first_name').value = customer.first_name;
+            document.getElementById('customer_last_name').value = customer.last_name;
+            document.getElementById('customer_address').value = customer.address;
             currentCustomerId = customer.id;
 
             document.getElementById('create-btn').style.display = 'none';
@@ -610,9 +627,9 @@
             }
         }
 
-        // Render customer table
+        // Render customer table - CHANGED: uses search_results
         function renderCustomers(customers) {
-            const container = document.getElementById('customer-list-container');
+            const container = document.getElementById('search_results');
             
             // Mark as rendering in progress
             container.setAttribute('data-loading', 'true');
@@ -695,9 +712,9 @@
             container.removeAttribute('data-loading');
         }
 
-        // List all customers
+        // List all customers - CHANGED: uses search_results and shows Success message
         async function listAllCustomers() {
-            const container = document.getElementById('customer-list-container');
+            const container = document.getElementById('search_results');
             container.innerHTML = '<div class="loading">Loading customers</div>';
 
             try {
@@ -705,6 +722,7 @@
                 if (response.ok) {
                     const customers = await response.json();
                     renderCustomers(customers);
+                    showFlash('Success', true);
                 } else {
                     const error = await response.json();
                     showFlash(`Error: ${error.message || 'Failed to load customers'}`, false);
@@ -726,20 +744,18 @@
             }
         }
 
-        // Search customers
-        async function searchCustomers(event) {
-            event.preventDefault();
-
-            const searchId = document.getElementById('search-id').value.trim();
-            const searchLastName = document.getElementById('search-last-name').value.trim();
-            const searchAddress = document.getElementById('search-address').value.trim();
+        // Search customers - CHANGED: uses new IDs and shows Success message
+        async function searchCustomers() {
+            const searchId = document.getElementById('customer_search_id').value.trim();
+            const searchLastName = document.getElementById('customer_search_last_name').value.trim();
+            const searchAddress = document.getElementById('customer_search_address').value.trim();
 
             const params = new URLSearchParams();
             if (searchId) params.append('id', searchId);
             if (searchLastName) params.append('last_name', searchLastName);
             if (searchAddress) params.append('address', searchAddress);
 
-            const container = document.getElementById('customer-list-container');
+            const container = document.getElementById('search_results');
             container.innerHTML = '<div class="loading">Searching customers</div>';
 
             try {
@@ -751,6 +767,7 @@
                 if (response.ok) {
                     const customers = await response.json();
                     renderCustomers(customers);
+                    showFlash('Success', true);
                 } else {
                     const error = await response.json();
                     showFlash(`Error: ${error.message || 'Search failed'}`, false);
@@ -762,12 +779,12 @@
             }
         }
 
-        // Event listeners
+        // Event listeners - CHANGED: button IDs match BDD pattern
         document.getElementById('create-btn').addEventListener('click', createCustomer);
         document.getElementById('update-btn').addEventListener('click', updateCustomer);
         document.getElementById('clear-btn').addEventListener('click', clearForm);
-        document.getElementById('list-all-btn').addEventListener('click', listAllCustomers);
-        document.getElementById('search-form').addEventListener('submit', searchCustomers);
+        document.getElementById('list_all-btn').addEventListener('click', listAllCustomers);
+        document.getElementById('search-btn').addEventListener('click', searchCustomers);
 
         // Form submission with Enter key
         document.getElementById('customer-form').addEventListener('keypress', function(e) {

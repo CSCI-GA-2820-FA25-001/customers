@@ -2,7 +2,7 @@
 const API_BASE = '/api';
 
 // DOM Elements
-const flashMessage = document.getElementById('flash-message');
+const flashMessage = document.getElementById('flash_message');
 const customerForm = document.getElementById('customer-form');
 const searchForm = document.getElementById('search-form');
 const customerListContainer = document.getElementById('customer-list-container');
@@ -14,14 +14,14 @@ const clearSearchBtn = document.getElementById('clear-search-btn');
 
 // Form inputs
 const customerIdInput = document.getElementById('customer-id');
-const firstNameInput = document.getElementById('first-name');
-const lastNameInput = document.getElementById('last-name');
+const firstNameInput = document.getElementById('customer_first_name');
+const lastNameInput = document.getElementById('customer_last_name');
 const addressInput = document.getElementById('address');
 
 // Utility Functions
 function showFlash(message, type = 'success') {
     flashMessage.textContent = message;
-    flashMessage.className = `flash-message ${type}`;
+    flashMessage.className = `flash_message ${type}`;
     flashMessage.classList.remove('hidden');
     
     setTimeout(() => {
@@ -305,7 +305,7 @@ searchForm.addEventListener('submit', async (e) => {
     const queryParams = {};
     const searchId = document.getElementById('search-id').value.trim();
     const searchFirstName = document.getElementById('search-first-name').value.trim();
-    const searchLastName = document.getElementById('search-last-name').value.trim();
+    const searchLastName = document.getElementById('search-customer_last_name').value.trim();
     const searchAddress = document.getElementById('search-address').value.trim();
     
     if (searchId) queryParams.id = searchId;
