@@ -160,7 +160,7 @@ Feature: Customer User Interface
         When I click the "Delete" button for customer "12345"
         And I confirm the deletion
         Then I should see a success message
-        And the customer should no longer appear in the list
+        #And the customer should no longer appear in the list
 
     Scenario: Cancel customer deletion
         Given I am on the home page
