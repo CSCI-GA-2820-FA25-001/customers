@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Customer Administration</title>
+    <title>Customer Service Administration</title>
     <style>
         * {
             margin: 0;
@@ -334,7 +334,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>Customer Service Administration</h1>
+            <h1>Customer Administration</h1>
             <p class="subtitle">Manage your customer accounts efficiently</p>
         </header>
 
@@ -558,9 +558,6 @@
                 });
 
                 if (response.ok || response.status === 204) {
-                    // Wait a moment for database transaction to fully commit
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    
                     showFlash('Success: Customer deleted!', true);
                     
                     // Clear form if this customer was being edited
@@ -568,9 +565,6 @@
                     if (currentId == customerId) {
                         clearForm();
                     }
-                    
-                    // Don't auto-refresh - let the test/user trigger it
-                    // This prevents race conditions in BDD tests
                 } else {
                     const error = await response.json();
                     showFlash(`Error: ${error.message || 'Failed to delete customer'}`, false);
@@ -624,6 +618,9 @@
         function renderCustomers(customers) {
             const container = document.getElementById('customer-list-container');
             
+            // Mark as rendering in progress
+            container.setAttribute('data-loading', 'true');
+            
             // Completely clear the container first
             container.innerHTML = '';
 
@@ -634,6 +631,7 @@
                         <div class="empty-state-text">No customers found</div>
                     </div>
                 `;
+                container.removeAttribute('data-loading');
                 return;
             }
 
@@ -696,6 +694,9 @@
             `;
 
             container.innerHTML = html;
+            
+            // Mark rendering as complete - Selenium can safely read now
+            container.removeAttribute('data-loading');
         }
 
         // List all customers
@@ -704,9 +705,7 @@
             container.innerHTML = '<div class="loading">Loading customers</div>';
 
             try {
-                // Add cache-busting to ensure fresh data from server
-                const timestamp = new Date().getTime();
-                const response = await fetch(`${API_BASE}/customers?_t=${timestamp}`);
+                const response = await fetch(`${API_BASE}/customers`);
                 if (response.ok) {
                     const customers = await response.json();
                     renderCustomers(customers);
