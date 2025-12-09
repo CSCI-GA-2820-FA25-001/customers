@@ -4,16 +4,20 @@ metadata:
   name: cd-pipeline
 spec:
   params:
-    - name: GIT_URL
+    - description: The URL to the git repo
+      name: GIT_REPO
       type: string
     - default: master
+      description: The reference (branch or ref)
       name: GIT_REF
       type: string
-    - default: 'image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.APP_NAME):latest'
-      name: IMAGE_NAME
-      type: string
-    - default: customers-service
+    - default: customers
+      description: Name of the application
       name: APP_NAME
+      type: string
+    - default: 'image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.APP_NAME):latest'
+      description: The name of the image to build
+      name: IMAGE_NAME
       type: string
   tasks:
     - name: git-clone
@@ -37,7 +41,7 @@ spec:
         - name: SSL_VERIFY
           value: 'true'
         - name: URL
-          value: $(params.GIT_URL)
+          value: $(params.GIT_REPO)
         - name: REVISION
           value: $(params.GIT_REF)
         - name: REFSPEC
@@ -67,8 +71,9 @@ spec:
         - name: path
           value: service
         - name: args
-          value:
-            - '--fail-under=9.0'
+          value: []
+        - name: requirements-file
+          value: requirements.txt
       runAfter:
         - git-clone
       taskRef:
@@ -77,11 +82,10 @@ spec:
       workspaces:
         - name: source
           workspace: pipeline-workspace
-    - name: pytest-env
+    - name: testing
       params:
         - name: pytest-args
-          value:
-            - '--pspec'
+          value: []
         - name: secret-name
           value: postgres-creds
         - name: secret-key
@@ -97,33 +101,49 @@ spec:
     - name: buildah
       params:
         - name: IMAGE
-          value: |-
-            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.APP_NAME):latest
+          value: $(params.IMAGE_NAME)
         - name: DOCKERFILE
-          value: Dockerfile
+          value: ./Dockerfile
+        - name: BUILD_ARGS
+          value:
+            - ''
         - name: CONTEXT
           value: .
-        - name: BUILDAH_FLAGS
-          value: '--storage-driver=vfs --isolation=chroot'
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: FORMAT
+          value: oci
+        - name: BUILD_EXTRA_ARGS
+          value: ''
+        - name: PUSH_EXTRA_ARGS
+          value: ''
+        - name: SKIP_PUSH
+          value: 'false'
+        - name: TLS_VERIFY
+          value: 'true'
+        - name: VERBOSE
+          value: 'false'
       runAfter:
         - pylint
-        - pytest-env
+        - testing
       taskRef:
-        kind: Task
-        name: buildah
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
       workspaces:
         - name: source
           workspace: pipeline-workspace
     - name: deploy-image
       params:
         - name: image-name
-          value: |-
-            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.APP_NAME):latest
+          value: $(params.IMAGE_NAME)
         - name: manifest-dir
           value: k8s
-        - name: IMAGE_NAME
-          value: |-
-            image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.APP_NAME):latest
       runAfter:
         - buildah
       taskRef:
