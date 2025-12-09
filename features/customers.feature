@@ -71,3 +71,48 @@ Scenario: Clear the form
     Then the "First Name" field should be empty
     And the "Last Name" field should be empty
     And the "Address" field should be empty
+
+# ------------------------------------------------------------------
+# UPDATE Scenario
+# ------------------------------------------------------------------
+
+Scenario: Update a Customer
+    When I visit the "Home Page"
+    And I press the "List All" button
+    Then I should see the message "Success"
+    And I should see "Alice" in the results
+    When I click the "Edit" button for "Alice Anderson" in the results
+    And I change "First Name" to "Alicia"
+    And I press the "Update" button
+    Then I should see the message "Success"
+    When I press the "List All" button
+    Then I should see the message "Success"
+    And I should see "Alicia" in the results
+    And I should not see "Alice" in the results
+
+# ------------------------------------------------------------------
+# DELETE Scenarios
+# ------------------------------------------------------------------
+
+Scenario: Delete a Customer
+    When I visit the "Home Page"
+    And I press the "List All" button
+    Then I should see the message "Success"
+    And I should see "Diana" in the results
+    When I click the "Delete" button for "Diana Davis" in the results
+    And I confirm the deletion
+    Then I should see the message "Success"
+    When I press the "List All" button
+    Then I should see the message "Success"
+    And I should not see "Diana" in the results
+
+Scenario: Cancel deleting a Customer
+    When I visit the "Home Page"
+    And I press the "List All" button
+    Then I should see the message "Success"
+    And I should see "Bob" in the results
+    When I click the "Delete" button for "Bob Brown" in the results
+    And I cancel the deletion
+    When I press the "List All" button
+    Then I should see the message "Success"
+    And I should see "Bob" in the results
